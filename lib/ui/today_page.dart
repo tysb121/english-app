@@ -6,6 +6,7 @@ import 'english_app.dart';
 import 'coach_thread_page.dart';
 import 'practice_page.dart';
 import 'theme.dart';
+import 'upgrade_nudge.dart';
 
 class TodayPage extends StatefulWidget {
   const TodayPage({super.key});
@@ -120,6 +121,10 @@ class _TodayPageState extends State<TodayPage> {
                 label: store.homeActionLabel(),
                 onPressed: () => _openPrimary(context, model),
               ),
+              if (store.shouldOfferLevelUpgrade) ...[
+                const SizedBox(height: 10),
+                const UpgradeNudgeCard(),
+              ],
               if (!model.hasDeepSeekKey) ...[
                 const SizedBox(height: 10),
                 const Text(

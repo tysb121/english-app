@@ -257,6 +257,8 @@ class LessonStore {
   int dailyWords = 5;
   String level = '入门';
   bool levelChosen = false;
+  /// User dismissed the low-stock upgrade card for the current level stock.
+  bool upgradeNudgeDismissed = false;
   String reasoningEffort = 'off';
   String goal = '职场';
   String tone = '简洁';
@@ -366,6 +368,40 @@ class LessonStore {
       count += 1;
     }
     return count;
+  }
+
+  /// Days of new words left at [dailyWords] pace (floor).
+  int untaughtDaysRemaining() {
+    if (dailyWords <= 0) return 0;
+    return untaughtInLevelCount() ~/ dailyWords;
+  }
+
+  /// Next product level, or null at the top band.
+  String? get nextProductLevel {
+    final current = normalizeLevel(level);
+    final index = productLevels.indexOf(current);
+    if (index < 0 || index >= productLevels.length - 1) return null;
+    return productLevels[index + 1];
+  }
+
+  /// Offer upgrade when remaining untaught words are under ~3 days of dailyWords.
+  bool get shouldOfferLevelUpgrade {
+    if (upgradeNudgeDismissed) return false;
+    if (nextProductLevel == null) return false;
+    return untaughtInLevelCount() < dailyWords * 3;
+  }
+
+  /// Confirm upgrade: level changes now; today's frozen plan is unchanged.
+  bool acceptLevelUpgrade() {
+    final next = nextProductLevel;
+    if (next == null) return false;
+    level = next;
+    upgradeNudgeDismissed = false;
+    return true;
+  }
+
+  void dismissUpgradeNudge() {
+    upgradeNudgeDismissed = true;
   }
 
   List<String> vocabQueue(DayPlan plan) => [
@@ -938,6 +974,7 @@ class LessonStore {
       'dailyWords': dailyWords,
       'level': level,
       'levelChosen': levelChosen,
+      'upgradeNudgeDismissed': upgradeNudgeDismissed,
       'reasoningEffort': reasoningEffort,
       'goal': goal,
       'tone': tone,
@@ -1075,6 +1112,7 @@ class LessonStore {
       // Returning users who already had a level saved are treated as chosen.
       levelChosen = true;
     }
+    upgradeNudgeDismissed = json['upgradeNudgeDismissed'] == true;
     if (json['reasoningEffort'] is String) {
       reasoningEffort = normalizeReasoningEffort(json['reasoningEffort'] as String);
     }

@@ -6,6 +6,7 @@ import '../engine/lesson_store.dart';
 import '../engine/reasoning_effort.dart';
 import 'english_app.dart';
 import 'theme.dart';
+import 'upgrade_nudge.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, this.gate = false});
@@ -188,7 +189,10 @@ class _SettingsPageState extends State<SettingsPage> {
               label: (value) => value,
               selected: level,
               onPick: (value) {
-                store.level = value;
+                if (store.level != value) {
+                  store.level = value;
+                  store.upgradeNudgeDismissed = false;
+                }
                 model.commit();
                 setState(() {});
               },
@@ -200,6 +204,10 @@ class _SettingsPageState extends State<SettingsPage> {
                   : '已经开始的今天不变，这些改动从明天生效。',
               style: const TextStyle(color: muted, fontSize: 13),
             ),
+            if (store.shouldOfferLevelUpgrade) ...[
+              const SizedBox(height: 12),
+              const UpgradeNudgeCard(),
+            ],
             const SizedBox(height: 16),
             const SectionTitle('目标', icon: Icons.flag_outlined),
             _choices<String>(

@@ -55,6 +55,66 @@ void main() {
     expect(store.ensureTodayPlan().newWordIds.first, 'cc_a1_hello_noun_ce4a5e');
   });
 
+  test('upgrade nudge when untaught stock under ~3 days', () {
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 4, 1),
+      level: '入门',
+    );
+    expect(store.nextProductLevel, '基础');
+    expect(store.untaughtInLevelCount(), 15);
+    expect(store.shouldOfferLevelUpgrade, isFalse);
+
+    final plan = store.ensureTodayPlan();
+    expect(plan.newWordIds, hasLength(5));
+    expect(store.untaughtInLevelCount(), 10);
+    expect(store.untaughtInLevelCount() < store.dailyWords * 3, isTrue);
+    expect(store.shouldOfferLevelUpgrade, isTrue);
+
+    store.dismissUpgradeNudge();
+    expect(store.shouldOfferLevelUpgrade, isFalse);
+
+    store.upgradeNudgeDismissed = false;
+    expect(store.acceptLevelUpgrade(), isTrue);
+    expect(store.level, '基础');
+    expect(store.ensureTodayPlan().newWordIds, plan.newWordIds);
+    // Fixture A2 pool is tiny, so the next band may also look low-stock.
+    expect(store.nextProductLevel, '进阶');
+    expect(store.shouldOfferLevelUpgrade, isTrue);
+
+    final day2 = DateTime(2026, 4, 2);
+    final store2 = fixtureStore(clock: () => day2, level: '基础');
+    store2.restore(store.progressJson());
+    expect(store2.level, '基础');
+    final next = store2.ensureTodayPlan();
+    for (final id in next.newWordIds) {
+      expect(store2.word(id)!.level, 'a2');
+    }
+  });
+
+  test('no upgrade nudge at top level or when stock is enough', () {
+    final top = fixtureStore(clock: () => DateTime(2026, 5, 1), level: '进阶');
+    top.ensureTodayPlan();
+    expect(top.nextProductLevel, isNull);
+    expect(top.shouldOfferLevelUpgrade, isFalse);
+
+    final rich = fixtureStore(clock: () => DateTime(2026, 5, 2), level: '入门');
+    rich.dailyWords = 5;
+    // 15 A1 words, no plan yet → not under 15 threshold.
+    expect(rich.shouldOfferLevelUpgrade, isFalse);
+  });
+
+  test('upgrade nudge flag round-trips in progress JSON', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 6, 1), level: '入门');
+    store.ensureTodayPlan();
+    expect(store.shouldOfferLevelUpgrade, isTrue);
+    store.dismissUpgradeNudge();
+    final raw = store.progressJson();
+    final copy = fixtureStore(clock: () => DateTime(2026, 6, 1), level: '入门');
+    copy.restore(raw);
+    expect(copy.upgradeNudgeDismissed, isTrue);
+    expect(copy.shouldOfferLevelUpgrade, isFalse);
+  });
+
   test('frozen plan, vocab, reviews, errors, check-in, and notes', () {
     var day = DateTime(2026, 1, 1);
     final store = fixtureStore(clock: () => day);
