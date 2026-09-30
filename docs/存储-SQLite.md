@@ -1,6 +1,6 @@
 # 本地存储方案：SQLite
 
-日期：2026-09-30。产品已定：**业务数据用 SQLite；密钥仍走系统安全存储**。当前仍为 `english_progress.json` + `flutter_secure_storage`；按下方顺序迁移。
+日期：2026-09-30。产品已定：**业务数据用 SQLite；密钥仍走系统安全存储**。实现入口：`lib/app/coach_database.dart`（库文件 `english_coach.db`）。密钥仍 `flutter_secure_storage`。旧 `english_progress.json` 首启迁移一次后不再写入。
 
 与 [产品方向-2026-09-30.md](产品方向-2026-09-30.md) 一致：无后端、无账号云同步；词书与进度都在本机。
 
@@ -46,16 +46,17 @@
 - 把 API Key 写入 SQLite
 - 为「省内存」再拆远程词库（本机 1MB 级足够）
 
-## 实现顺序
+## 实现顺序与状态
 
-1. 加依赖与空库 / schema 版本
-2. 灌入 `cefr_core`，用 SQL 按 level 抽未教词，替换 LessonStore 选词数据源
-3. 迁移 settings + day_plan + progress
-4. 迁移 chat
-5. 去掉 JSON 写入；更新测试与 [下一步.md](下一步.md)
+1. ~~加依赖与空库 / schema 版本~~（sqflite + ffi）
+2. ~~灌入 `cefr_core`~~；SQL `pickUntaughtIds` 已提供。LessonStore 选词仍用内存池（启动时从 SQLite / assets 加载），日内可再改为直接 SQL 抽词。
+3. ~~迁移 settings + day_plan + progress（attempts / error_log / word_progress）~~
+4. ~~迁移 chat_messages + chat_checkpoints~~
+5. ~~去掉 JSON 写入主路径~~；`LocalProgress` 仅供一次性迁移读取。
 
 ## 现状指针
 
-- 进度文件：`lib/app/local_progress.dart` → `english_progress.json`
+- 业务库：`lib/app/coach_database.dart` → `english_coach.db`
+- 旧进度（只读迁移）：`lib/app/local_progress.dart` → `english_progress.json`
 - 密钥：`lib/app/secrets.dart` → secure storage
-- 词书资源：`assets/wordbooks/cefr_core.json`
+- 词书资源：`assets/wordbooks/cefr_core.json`（首启灌入 `wordbook` 表）

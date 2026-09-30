@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'app/app_model.dart';
-import 'app/local_progress.dart';
+import 'app/coach_database.dart';
 import 'app/progress_shell.dart';
 import 'app/secrets.dart';
 import 'data/cefr_core.dart';
@@ -13,18 +13,31 @@ import 'ui/english_app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final secrets = await SecureSecrets().load();
-  final progress = await LocalProgress.open();
   final book = await loadCefrCore();
-  final store = LessonStore(book: book.entries);
+  final coachDb = await CoachDatabase.open(seedBook: book.entries);
+  final fromDb = await coachDb.loadWordbook();
+  final store = LessonStore(book: fromDb.isNotEmpty ? fromDb : book.entries);
   final shell = ProgressShell(store: store, chat: ChatThread());
-  final saved = await progress.read();
-  if (saved != null && saved.trim().isNotEmpty) {
+
+  final hadSqlite = await coachDb.hasProgress();
+  if (hadSqlite) {
     try {
-      shell.restore(saved);
+      await coachDb.loadShell(shell);
     } on Object {
-      // Keep the fresh store when the file cannot be read.
+      // Keep fresh store if DB rows cannot be read.
+    }
+  } else {
+    await coachDb.migrateLegacyJsonIfNeeded(shell);
+  }
+
+  Future<void> persist() async {
+    try {
+      await coachDb.saveShell(shell);
+    } on Object {
+      // Disk errors must not roll back in-memory answers.
     }
   }
+
   final model = AppModel(
     store: store,
     poster: IoPoster(),
@@ -36,11 +49,14 @@ Future<void> main() async {
     tokenHubBase: secrets.tokenHubBase,
     tokenHubModel: secrets.tokenHubModel,
     unlocked: secrets.deepSeekKey.trim().isNotEmpty,
-    persistProgress: (ignored) => progress.save(shell.encode()),
+    persistProgress: (_) {
+      // Fire-and-forget; AppModel.commit already swallows sync errors.
+      persist();
+    },
     persistSecrets: SecureSecrets().save,
   );
-  if (saved == null || saved.trim().isEmpty) {
-    progress.save(shell.encode());
+  if (!hadSqlite) {
+    await persist();
   }
   runApp(EnglishApp(model: model));
 }

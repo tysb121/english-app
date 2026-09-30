@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+/// Legacy JSON progress file (read-only migration into SQLite).
 class LocalProgress {
   LocalProgress(this.file);
 
