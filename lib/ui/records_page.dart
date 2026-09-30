@@ -19,7 +19,7 @@ class RecordsPage extends StatelessWidget {
                 padding: EdgeInsets.all(24),
                 child: EmptyHint(
                   icon: Icons.calendar_month_outlined,
-                  title: '还没有打卡记录',
+                  title: '还没有练习记录',
                   subtitle: '完成今天的认词、造句和短对话后，会显示在这里。',
                 ),
               ),

@@ -31,11 +31,8 @@ class _TodayPageState extends State<TodayPage> {
       _showNotes = true;
       _drafts = [...store.noteDrafts()];
     }
-    final preview = plan.newWordIds.take(2).toList();
-    final rest = [
-      ...plan.newWordIds.skip(2),
-      ...plan.reviewWordIds,
-    ];
+    final todayWords = plan.newWordIds;
+    final reviewExtra = plan.reviewWordIds;
     final tomorrowLine =
         store.checkedIn ? store.tomorrowReviewPreviewLine() : null;
     return SoftScaffold(
@@ -121,7 +118,7 @@ class _TodayPageState extends State<TodayPage> {
               if (!model.hasDeepSeekKey) ...[
                 const SizedBox(height: 10),
                 const Text(
-                  '还没填 DeepSeek 密钥：可点词卡「懂了」；跟教练对话需到「我的」填写。',
+                  '还没填写 DeepSeek 密钥：可以先点词卡「懂了」；要和教练对话，请到「我的」填写。',
                   style: TextStyle(fontSize: 13, color: muted),
                 ),
               ],
@@ -132,13 +129,13 @@ class _TodayPageState extends State<TodayPage> {
                   child: TextButton.icon(
                     onPressed: () => _openErrors(context),
                     icon: const Icon(Icons.replay_circle_filled_outlined),
-                    label: Text('错词 ${plan.errorWordIds.length}（对话后再练）'),
+                    label: Text('错词 ${plan.errorWordIds.length}（练完对话后再练）'),
                   ),
                 ),
               ],
               const SizedBox(height: 8),
               const Text(
-                '点进教练聊天练今天的词：词卡「懂了」、对话里「用过」、大约几轮即可。到期错词可另练。',
+                '点进教练聊天练习今天的词：先「懂了」，再在对话里「用过」，聊几轮就完成。有到期错词可以另外练。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
               if (tomorrowLine != null) ...[
@@ -149,21 +146,13 @@ class _TodayPageState extends State<TodayPage> {
                 ),
               ],
               const SizedBox(height: 8),
-              const SectionTitle('今天的说法', icon: Icons.chat_bubble_outline_rounded),
-              for (final id in preview) _card(store, id),
-              if (rest.isNotEmpty)
-                AppCard(
-                  padding: EdgeInsets.zero,
-                  child: Theme(
-                    data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                    child: ExpansionTile(
-                      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                      childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                      title: Text('其余 ${rest.length} 个'),
-                      children: [for (final id in rest) _card(store, id)],
-                    ),
-                  ),
-                ),
+              const SectionTitle('今日练习的词', icon: Icons.chat_bubble_outline_rounded),
+              for (final id in todayWords) _card(store, id),
+              if (reviewExtra.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                const SectionTitle('复习', icon: Icons.replay_rounded),
+                for (final id in reviewExtra) _card(store, id),
+              ],
             ],
           ),
           if (_showNotes) HalfSheet(child: _notes(model)),
@@ -259,7 +248,7 @@ class _TodayPageState extends State<TodayPage> {
 
   void _openPrimary(BuildContext context, AppModel model) {
     final label = model.store.homeActionLabel();
-    if (label == '回看今天' && model.store.checkedIn) {
+    if (label == '回看练习' && model.store.checkedIn) {
       Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => const CoachThreadPage(readOnly: true),

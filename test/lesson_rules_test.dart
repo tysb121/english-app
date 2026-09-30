@@ -1,4 +1,5 @@
 import 'package:english_app/engine/api_requests.dart';
+import 'package:english_app/app/diagnostics.dart';
 import 'package:english_app/engine/lesson_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -564,7 +565,7 @@ void main() {
     final store = fixtureStore(clock: () => DateTime(2026, 7, 10));
     final plan = store.ensureTodayPlan();
     expect(store.checkedIn, isFalse);
-    expect(store.homeActionLabel(), '开始今天');
+    expect(store.homeActionLabel(), '开始练习');
     expect(store.progressRemainderLine(), contains('还差'));
 
     for (final id in plan.newWordIds) {
@@ -574,7 +575,7 @@ void main() {
     }
     expect(store.vocabDone, isTrue);
     expect(store.checkedIn, isFalse);
-    expect(store.homeActionLabel(), '继续练');
+    expect(store.homeActionLabel(), '继续练习');
 
     final first = plan.newWordIds.first;
     final en = store.word(first)!.en;
@@ -595,7 +596,7 @@ void main() {
     expect(store.dialogueDone, isTrue);
     expect(store.checkedIn, isTrue);
     expect(store.progressRemainderLine(), '今天练完了');
-    expect(store.homeActionLabel(), '回看今天');
+    expect(store.homeActionLabel(), '回看练习');
 
     store.markWordUsed(first);
     store.recordPracticeRound();
@@ -647,9 +648,41 @@ void main() {
     expect(store.checkedIn, isTrue);
     final preview = store.tomorrowReviewPreviewLine();
     expect(preview, isNotNull);
-    expect(preview, contains('明天复习预告'));
+    expect(preview, contains('明天可能会复习'));
     expect(preview, contains(store.word(wrongId)!.en));
     expect(store.tomorrowReviewWordIds(), [wrongId]);
+  });
+
+
+  test('clearLearningProgress wipes plans but keeps settings', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 3, 1), levelChosen: true);
+    store.ensureTodayPlan();
+    store.acknowledgeWord(store.scheduledNewWords().first);
+    store.recordPracticeRound();
+    expect(store.practiceRounds, 1);
+    store.clearLearningProgress();
+    expect(store.practiceRounds, 0);
+    expect(store.levelChosen, isTrue);
+    expect(store.level, '入门');
+    store.ensureTodayPlan();
+    expect(store.scheduledNewWords(), isNotEmpty);
+  });
+
+  test('diagnostic report excludes secrets and includes version', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 3, 2), levelChosen: true);
+    store.ensureTodayPlan();
+    store.recordCall(task: 'grade_open', ok: false, finishReason: 'length');
+    final text = buildDiagnosticReport(
+      appVersion: '1.0.2+3',
+      store: store,
+      deepSeekBase: 'https://api.deepseek.com',
+      deepSeekModel: 'deepseek-flash',
+      connectionMessage: '服务暂时不可用',
+    );
+    expect(text, contains('1.0.2+3'));
+    expect(text, contains('grade_open'));
+    expect(text, isNot(contains('sk-')));
+    expect(text, contains('密钥未包含'));
   });
 
 }

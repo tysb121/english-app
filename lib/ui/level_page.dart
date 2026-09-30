@@ -38,7 +38,7 @@ class LevelPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            '决定从哪一档 CEFR 词开始。今天的计划冻住后，改水平从明天生效。',
+            '选择一个适合自己的起点。今日练习开始后，改水平会从明天起生效。',
             style: TextStyle(color: muted, height: 1.45),
           ),
           const SizedBox(height: 16),

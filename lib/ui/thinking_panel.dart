@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'theme.dart';
 
@@ -92,6 +93,32 @@ class CoachAnswerBubble extends StatelessWidget {
   final int? elapsedMs;
   final DateTime? finishedAt;
 
+  static MarkdownStyleSheet _coachMdStyle(BuildContext context) {
+    const base = TextStyle(color: ink, height: 1.45, fontSize: 15);
+    return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+      p: base,
+      pPadding: EdgeInsets.zero,
+      strong: base.copyWith(fontWeight: FontWeight.w700),
+      em: base.copyWith(fontStyle: FontStyle.italic),
+      code: base.copyWith(
+        fontFamily: 'monospace',
+        fontSize: 13.5,
+        backgroundColor: indigo.withValues(alpha: 0.08),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: indigo.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      blockquote: base.copyWith(color: muted),
+      listBullet: base,
+      listIndent: 20,
+      h1: base.copyWith(fontSize: 17, fontWeight: FontWeight.w700),
+      h2: base.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+      h3: base.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+      blockSpacing: 8,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final pass = content.startsWith('✓');
@@ -111,6 +138,8 @@ class CoachAnswerBubble extends StatelessWidget {
       border = softBorder;
       fill = mist;
     }
+
+    final display = content.trim().isEmpty && streaming ? '…' : content;
 
     final bubble = Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -146,10 +175,17 @@ class CoachAnswerBubble extends StatelessWidget {
                 streaming: streaming && content.trim().isEmpty,
               ),
             if (content.trim().isNotEmpty || !streaming)
-              Text(
-                content.trim().isEmpty && streaming ? '…' : content,
-                style: const TextStyle(color: ink, height: 1.4),
-              )
+              mine
+                  ? Text(
+                      display,
+                      style: const TextStyle(color: ink, height: 1.4),
+                    )
+                  : MarkdownBody(
+                      data: display,
+                      selectable: false,
+                      softLineBreak: true,
+                      styleSheet: _coachMdStyle(context),
+                    )
             else if (streaming && reasoning.trim().isNotEmpty)
               const Text(
                 '回答生成中…',

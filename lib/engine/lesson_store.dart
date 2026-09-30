@@ -948,7 +948,7 @@ class LessonStore {
     final words = remainingWordTasks;
     final rounds = remainingPracticeRounds;
     if (words == 0 && rounds == 0) return '今天练完了';
-    return '还差：词$words / 轮次$rounds';
+    return '还差：认识 $words 个词 · 对话 $rounds 轮';
   }
 
   String sentencePrompt(String wordId) {
@@ -994,7 +994,7 @@ class LessonStore {
       labels.add(w?.en ?? id);
     }
     final more = ids.length > maxWords ? ' 等${ids.length}个' : '';
-    return '明天复习预告：${labels.join(' · ')}$more';
+    return '明天可能会复习：${labels.join(' · ')}$more';
   }
 
   /// 2–3 optional first-turn dialogue openings using today's words.
@@ -1201,20 +1201,20 @@ class LessonStore {
 
   String homeActionLabel() {
     final plan = ensureTodayPlan();
-    if (checkedIn) return '回看今天';
+    if (checkedIn) return '回看练习';
     final attempts = _attempts[_key(plan.date)] ?? [];
     final started = attempts.isNotEmpty ||
         plan.sentenceResults.isNotEmpty ||
         plan.dialogueCursor > 0 ||
         (plan.scene != null);
-    if (!started) return '开始今天';
+    if (!started) return '开始练习';
     if (plan.errorWordIds.isNotEmpty &&
         vocabDone &&
         sentencesDone &&
         plan.dialogueDone) {
       return '还有错词';
     }
-    return '继续练';
+    return '继续练习';
   }
 
   List<StudyNote> noteDrafts() {
@@ -1406,6 +1406,17 @@ class LessonStore {
   }
 
   String progressJson() => jsonEncode(toJson());
+
+  /// Wipe plans, reviews, errors, attempts, and API call log.
+  /// Keeps installId, level/settings, and wordbook/user lexemes.
+  void clearLearningProgress() {
+    _plans.clear();
+    _attempts.clear();
+    _errors.clear();
+    _reviews.clear();
+    callLog.clear();
+    _untaughtInLevelCache = null;
+  }
 
   String _key(DateTime value) {
     final day = dateOnly(value);

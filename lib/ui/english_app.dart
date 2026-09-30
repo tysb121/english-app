@@ -128,7 +128,7 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(
             icon: Icon(Icons.wb_sunny_outlined),
             selectedIcon: Icon(Icons.wb_sunny_rounded),
-            label: '今天',
+            label: '今日练习',
           ),
           NavigationDestination(
             icon: Icon(Icons.auto_stories_outlined),

@@ -61,6 +61,17 @@ class AppModel extends ChangeNotifier {
   /// UI-only refresh (e.g. stream tokens) without rewriting progress.
   void tick() => notifyListeners();
 
+  /// Clear lesson progress + coach chat (keys/settings kept). Persists via [commit].
+  Future<void> clearLocalLearning() async {
+    store.clearLearningProgress();
+    chat?.clear();
+    connectionOk = false;
+    connectionMessage = null;
+    await store.ensureTodayPlanAsync();
+    commit();
+  }
+
+
   void unlock() {
     if (!hasDeepSeekKey) return;
     unlocked = true;

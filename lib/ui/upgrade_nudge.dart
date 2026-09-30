@@ -34,7 +34,7 @@ class UpgradeNudgeCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '「$current」未教新词已经全部练完。升到「$next」后从明天按新级抽词，今天计划不动。',
+            '「$current」的新词已经练完。升到「$next」后，明天起会按新水平出词；今天的练习不变。',
             style: const TextStyle(color: muted, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 12),

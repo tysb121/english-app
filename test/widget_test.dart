@@ -7,6 +7,7 @@ import 'package:english_app/engine/chat_thread.dart';
 import 'package:english_app/engine/lesson_store.dart';
 import 'package:english_app/net/poster.dart';
 import 'package:english_app/ui/english_app.dart';
+import 'package:english_app/ui/thinking_panel.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -21,7 +22,7 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     expect(find.text('先选一个水平'), findsOneWidget);
     expect(find.text('入门'), findsOneWidget);
-    expect(find.text('今天'), findsNothing);
+    expect(find.text('今日练习'), findsNothing);
     await tester.tap(find.text('入门'));
     await tester.pumpAndSettle();
     expect(find.text('测试连接'), findsOneWidget);
@@ -40,9 +41,9 @@ void main() {
     await tester.tap(find.text('先看看，稍后再填密钥'));
     await tester.pumpAndSettle();
     expect(find.byType(NavigationBar), findsOneWidget);
-    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('今日练习'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
-    expect(find.textContaining('还没填 DeepSeek 密钥'), findsOneWidget);
+    expect(find.textContaining('还没填写 DeepSeek 密钥'), findsOneWidget);
   });
 
 
@@ -73,11 +74,11 @@ void main() {
     expect(find.text('基础'), findsOneWidget);
     expect(find.text('进阶'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.textContaining('今天的计划已定'),
+      find.textContaining('今日练习已开始'),
       120,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.textContaining('今天的计划已定'), findsOneWidget);
+    expect(find.textContaining('今日练习已开始'), findsOneWidget);
   });
 
   testWidgets('a saved key shows four tabs and the home label', (tester) async {
@@ -93,16 +94,16 @@ void main() {
     );
     await tester.pumpWidget(EnglishApp(model: model));
     expect(find.text('今日英语'), findsWidgets);
-    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('今日练习'), findsOneWidget);
     expect(find.text('词'), findsOneWidget);
     expect(find.text('记录'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
-    expect(find.text('开始今天'), findsOneWidget);
+    expect(find.text('开始练习'), findsOneWidget);
 
     store.submitVocab('nope');
     model.commit();
     await tester.pump();
-    expect(find.text('继续练'), findsOneWidget);
+    expect(find.text('继续练习'), findsOneWidget);
   });
 
   testWidgets('home labels follow the real store', (tester) async {
@@ -118,7 +119,7 @@ void main() {
       store.acknowledgeWord(id);
     }
     await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('继续练'), findsOneWidget);
+    expect(find.text('继续练习'), findsOneWidget);
     expect(find.text('懂了'), findsWidgets);
     expect(find.text('用过'), findsOneWidget);
     expect(find.text('轮次'), findsOneWidget);
@@ -128,14 +129,14 @@ void main() {
     }
     model.commit();
     await tester.pump();
-    expect(find.text('继续练'), findsOneWidget);
+    expect(find.text('继续练习'), findsOneWidget);
 
     for (var i = 0; i < targetPracticeRounds; i++) {
       store.recordPracticeRound();
     }
     model.commit();
     await tester.pump();
-    expect(find.text('回看今天'), findsOneWidget);
+    expect(find.text('回看练习'), findsOneWidget);
     expect(store.checkedIn, isTrue);
   });
 
@@ -149,9 +150,9 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('开始今天'));
+    await tester.tap(find.text('开始练习'));
     await tester.pumpAndSettle();
-    expect(find.text('跟教练练'), findsOneWidget);
+    expect(find.text('跟教练练习'), findsOneWidget);
     expect(find.textContaining('还差'), findsWidgets);
     expect(find.text('hello'), findsWidgets);
     expect(find.text('懂了'), findsWidgets);
@@ -189,8 +190,8 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: chatModel));
-    expect(find.text('继续练'), findsOneWidget);
-    await tester.tap(find.text('继续练'));
+    expect(find.text('继续练习'), findsOneWidget);
+    await tester.tap(find.text('继续练习'));
     await tester.pumpAndSettle();
     expect(find.text('发送'), findsOneWidget);
     final wordId = store.scheduledNewWords().first;
@@ -218,13 +219,13 @@ void main() {
     await tester.tap(find.text('测试连接'));
     await tester.pump();
     expect(find.text('正在测试'), findsWidgets);
-    expect(find.text('开始今天'), findsNothing);
+    expect(find.text('开始练习'), findsNothing);
 
     poster.finish(const Posted(401, '{"error":"bad"}'));
     await tester.pumpAndSettle();
     expect(find.text('密钥无效'), findsOneWidget);
     expect(find.text('测试连接'), findsOneWidget);
-    expect(find.text('开始今天'), findsNothing);
+    expect(find.text('开始练习'), findsNothing);
     expect(poster.calls, hasLength(1));
 
     await tester.tap(find.text('测试连接'));
@@ -233,12 +234,12 @@ void main() {
     poster.finish(const Posted(200, '{"choices":[]}'));
     await tester.pumpAndSettle();
     expect(find.text('已连通'), findsOneWidget);
-    expect(find.text('开始今天'), findsOneWidget);
+    expect(find.text('开始练习'), findsOneWidget);
 
-    await tester.tap(find.text('开始今天'));
+    await tester.tap(find.text('开始练习'));
     await tester.pumpAndSettle();
-    expect(find.text('今天'), findsOneWidget);
-    expect(find.text('开始今天'), findsOneWidget);
+    expect(find.text('今日练习'), findsOneWidget);
+    expect(find.text('开始练习'), findsOneWidget);
   });
 
   testWidgets('closing coach chat keeps 懂了 and resumes', (
@@ -253,7 +254,7 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('开始今天'));
+    await tester.tap(find.text('开始练习'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('懂了').first);
     await tester.pumpAndSettle();
@@ -262,9 +263,9 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
-    expect(find.text('继续练'), findsOneWidget);
+    expect(find.text('继续练习'), findsOneWidget);
 
-    await tester.tap(find.text('继续练'));
+    await tester.tap(find.text('继续练习'));
     await tester.pumpAndSettle();
     expect(find.text('懂了'), findsWidgets);
     expect(store.vocabSeen('cc_a1_hello_noun_ce4a5e'), isTrue);
@@ -306,6 +307,23 @@ void main() {
     expect(find.text('提交'), findsNothing);
     expect(store.nextErrorReview('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 2, 5));
   });
+  testWidgets('coach bubble renders markdown bold without raw markers', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CoachAnswerBubble(
+            content: 'Try **I like chicken.** again.',
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('**'), findsNothing);
+    expect(find.textContaining('I like chicken.'), findsOneWidget);
+  });
+
 }
 
 final Finder _keyField = find.byWidgetPredicate(

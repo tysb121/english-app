@@ -59,3 +59,6 @@ key.properties
 PASSWORDS.txt
 **/PASSWORDS.txt
 android/upload-keystore.jks
+
+# Local UI capture dumps
+artifacts/

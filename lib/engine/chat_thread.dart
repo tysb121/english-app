@@ -34,6 +34,14 @@ class ChatThread {
         if (contextSummary != null) 'contextSummary': contextSummary!.toJson(),
       };
 
+  void clear() {
+    messages.clear();
+    contextSummary = null;
+    lastError = null;
+    busy = false;
+    streamingIndex = null;
+  }
+
   void restore(Object? raw) {
     messages.clear();
     contextSummary = null;
