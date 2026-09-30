@@ -15,6 +15,7 @@ import 'english_app.dart';
 import 'theme.dart';
 import 'upgrade_nudge.dart';
 import '../update/update_ui.dart';
+import '../update/version.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, this.gate = false});
@@ -34,6 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _filled = false;
   bool _obscureDeepSeek = true;
   String _appVersion = '…';
+  String _diagnosticVersion = '未知';
 
   static const _levels = productLevels;
 
@@ -48,11 +50,16 @@ class _SettingsPageState extends State<SettingsPage> {
       final info = await PackageInfo.fromPlatform();
       if (!mounted) return;
       setState(() {
-        _appVersion = '${info.version}+${info.buildNumber}';
+        // Users see vX.Y.Z only; +build stays in diagnostic export.
+        _appVersion = formatDisplayVersion(info.version);
+        _diagnosticVersion = '${info.version}+${info.buildNumber}';
       });
     } on Object {
       if (!mounted) return;
-      setState(() => _appVersion = '未知');
+      setState(() {
+        _appVersion = '未知';
+        _diagnosticVersion = '未知';
+      });
     }
   }
 
@@ -344,7 +351,7 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _busy = true);
     try {
       final report = buildDiagnosticReport(
-        appVersion: _appVersion,
+        appVersion: _diagnosticVersion,
         store: model.store,
         chat: model.chat,
         connectionMessage: model.connectionMessage,

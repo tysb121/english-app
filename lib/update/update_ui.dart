@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import 'github_release.dart';
+import 'release_notes.dart';
 import 'update_checker.dart';
+import 'version.dart';
 import '../ui/theme.dart';
 
 /// Run a manual「检查更新」from settings. Never throws.
@@ -25,11 +27,15 @@ Future<void> runManualUpdateCheck(BuildContext context) async {
       );
     case UpdateUpToDate(:final localVersion):
       messenger.showSnackBar(
-        SnackBar(content: Text('已是最新版本（$localVersion）')),
+        SnackBar(
+          content: Text('已是最新版本（${formatDisplayVersion(localVersion)}）'),
+        ),
       );
     case UpdateNoRelease(:final localVersion):
       messenger.showSnackBar(
-        SnackBar(content: Text('暂无发布版本（当前 $localVersion）')),
+        SnackBar(
+          content: Text('暂无发布版本（当前 ${formatDisplayVersion(localVersion)}）'),
+        ),
       );
     case UpdateCheckFailed(:final message):
       messenger.showSnackBar(SnackBar(content: Text(message)));
@@ -57,7 +63,7 @@ Future<void> showUpdateDialog(
   required String localVersion,
   required AppUpdateChecker checker,
 }) async {
-  final notes = release.body.trim().isEmpty ? '有新版本可用。' : release.body.trim();
+  final notes = formatReleaseNotesForDisplay(release.body);
   await showDialog<void>(
     context: context,
     builder: (ctx) {
@@ -124,15 +130,17 @@ class _UpdateDialogState extends State<_UpdateDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final remoteLabel = formatDisplayVersion(widget.release.tagName);
+    final localLabel = formatDisplayVersion(widget.localVersion);
     return AlertDialog(
-      title: Text('发现新版本 ${widget.release.tagName}'),
+      title: Text('发现新版本 $remoteLabel'),
       content: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              '当前 ${widget.localVersion}',
+              '当前 $localLabel',
               style: const TextStyle(color: muted, fontSize: 13),
             ),
             const SizedBox(height: 12),

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:english_app/update/github_release.dart';
+import 'package:english_app/update/release_notes.dart';
 import 'package:english_app/update/version.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,6 +12,16 @@ void main() {
       expect(normalizeVersionName('V1.0.0'), '1.0.0');
       expect(normalizeVersionName('1.0.0+12'), '1.0.0');
       expect(normalizeVersionName(' v2.0.0+1 '), '2.0.0');
+    });
+  });
+
+  group('formatDisplayVersion', () {
+    test('always vX.Y.Z without build', () {
+      expect(formatDisplayVersion('1.0.4+5'), 'v1.0.4');
+      expect(formatDisplayVersion('v1.0.4'), 'v1.0.4');
+      expect(formatDisplayVersion('1.0.4'), 'v1.0.4');
+      expect(formatDisplayVersion(' V1.0.0+9 '), 'v1.0.0');
+      expect(formatDisplayVersion(''), '');
     });
   });
 
@@ -37,6 +48,42 @@ void main() {
         isRemoteNewer(remoteTag: 'v1.0.0', localVersionName: '1.0.1'),
         isFalse,
       );
+    });
+  });
+
+  group('formatReleaseNotesForDisplay', () {
+    test('strips markdown and softens full-APK line from real v1.0.4 body', () {
+      const raw = '''
+## 改动
+- **新手首页词卡**：今日词默认全亮展示英文 + 中文 + 词性（EN+CN 完整呈现）
+- **「看过了」记账**：勾选框或点整卡只记「看过了」，不再靠点才揭英文
+- **一行进度**：去掉顶部三枚胶囊，改为一行 `还差：还没看× / 还没用× / 还差×轮`（完成则「今日练习完成」）
+- 软文案：「看一眼，再跟教练聊几句就行。」
+
+完整 APK 更新（非增量）。版本：`1.0.4+5`
+''';
+      final notes = formatReleaseNotesForDisplay(raw);
+      expect(notes, isNot(contains('##')));
+      expect(notes, isNot(contains('**')));
+      expect(notes, isNot(contains('`')));
+      expect(notes, isNot(contains('1.0.4+5')));
+      expect(notes, isNot(contains('非增量')));
+      expect(notes, contains('• 新手首页词卡：'));
+      expect(notes, contains('还差：还没看×'));
+      expect(notes, contains('本次需下载完整安装包。'));
+      expect(notes.split('\n').first, '改动');
+    });
+
+    test('empty body falls back', () {
+      expect(formatReleaseNotesForDisplay(''), '有新版本可用。');
+      expect(formatReleaseNotesForDisplay('   '), '有新版本可用。');
+    });
+
+    test('drops standalone version meta lines', () {
+      const raw = '版本：`1.0.4+5`\n- 修复闪退';
+      final notes = formatReleaseNotesForDisplay(raw);
+      expect(notes, isNot(contains('1.0.4+5')));
+      expect(notes, '• 修复闪退');
     });
   });
 

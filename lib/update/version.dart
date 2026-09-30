@@ -53,3 +53,10 @@ bool isRemoteNewer({
 }) {
   return compareVersionNames(remoteTag, localVersionName) > 0;
 }
+
+/// User-facing label: always `vX.Y.Z` (no `+build`). Empty → empty.
+String formatDisplayVersion(String raw) {
+  final name = normalizeVersionName(raw);
+  if (name.isEmpty) return '';
+  return 'v$name';
+}
