@@ -11,6 +11,15 @@ typedef UntaughtIdPicker = Future<List<String>> Function({
   required Set<String> exclude,
 });
 
+/// Async untaught COUNT (SQL). Prefer this over scanning the in-memory book.
+typedef UntaughtCountFn = Future<int> Function({
+  required String level,
+  required Set<String> exclude,
+});
+
+/// Batch load book lemmas by id (SQL). Used to hydrate the Lexeme cache.
+typedef BookWordsByIds = Future<List<CefrWord>> Function(List<String> ids);
+
 DateTime dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
@@ -237,18 +246,13 @@ class LessonStore {
     Random? random,
     String? installId,
     this.untaughtIdPicker,
+    this.untaughtCountFn,
+    this.bookWordsByIds,
   }) : _clock = clock ?? DateTime.now,
        _random = random ?? Random(),
        installId = installId ?? createInstallId() {
     for (final entry in book ?? const <CefrWord>[]) {
-      _words[entry.id] = Lexeme(
-        id: entry.id,
-        en: entry.en,
-        cn: entry.cn,
-        pos: entry.pos,
-        source: WordSource.book,
-        level: entry.level,
-      );
+      cacheBookWord(entry);
     }
   }
 
@@ -256,7 +260,13 @@ class LessonStore {
   final Random _random;
   /// Prefer SQL-backed picking when set; [ensureTodayPlan] falls back to RAM.
   UntaughtIdPicker? untaughtIdPicker;
+  /// Prefer SQL COUNT when set; [untaughtInLevelCount] uses cache + RAM fallback.
+  UntaughtCountFn? untaughtCountFn;
+  /// Lazy Lexeme hydrate from SQLite by id.
+  BookWordsByIds? bookWordsByIds;
   final Map<String, Lexeme> _words = {};
+  /// Warm SQL untaught count; null means not loaded (or invalidated).
+  int? _untaughtInLevelCache;
   final Map<String, DayPlan> _plans = {};
   final Map<String, List<_Attempt>> _attempts = {};
   final Map<String, _ErrorItem> _errors = {};
@@ -281,6 +291,7 @@ class LessonStore {
 
   /// Sync plan create/get. Uses in-memory [pickUntaughtIds] when freezing.
   /// Prefer [ensureTodayPlanAsync] in the app so book slots come from SQL.
+  /// After startup freeze, this is a cheap map lookup (no re-pick).
   DayPlan ensureTodayPlan() {
     final existing = _plans[_key(today)];
     if (existing != null) return existing;
@@ -291,7 +302,21 @@ class LessonStore {
   Future<DayPlan> ensureTodayPlanAsync() async {
     final existing = _plans[_key(today)];
     if (existing != null) return existing;
-    return _freezeTodayPlan(await _pickNewWordIdsAsync());
+    final plan = _freezeTodayPlan(await _pickNewWordIdsAsync());
+    final loader = bookWordsByIds;
+    if (loader != null) {
+      await hydrateBookWords(loader);
+    }
+    await refreshUntaughtInLevelCount();
+    return plan;
+  }
+
+  /// UI hot path after [ensureTodayPlanAsync]: returns today's frozen plan.
+  /// Falls back to sync ensure only when no plan exists yet (tests / incomplete wiring).
+  DayPlan get requiredTodayPlan {
+    final existing = todayPlan;
+    if (existing != null) return existing;
+    return ensureTodayPlan();
   }
 
   List<String> _userWordCandidates(Set<String> used) {
@@ -375,6 +400,7 @@ class LessonStore {
     for (final id in picked) {
       _reviews.putIfAbsent(id, () => _Review()).introducedOn ??= today;
     }
+    _untaughtInLevelCache = null;
     return plan;
   }
 
@@ -391,6 +417,9 @@ class LessonStore {
 
   Lexeme? word(String id) => _words[id];
 
+  /// Cache size of hydrated + user lexemes (not the full CEFR book).
+  int get cachedLexemeCount => _words.length;
+
   List<Lexeme> get catalog => _words.values.toList();
 
   /// User words plus already-introduced book words (keeps 词本 UI off the full 5k list).
@@ -401,11 +430,57 @@ class LessonStore {
             word,
       ];
 
-  int untaughtInLevelCount() {
-    final code = cefrCodeForLevel(level);
-    final used = <String>{
-      for (final plan in _plans.values) ...plan.newWordIds,
+  void cacheBookWord(CefrWord entry) {
+    _words.putIfAbsent(
+      entry.id,
+      () => Lexeme(
+        id: entry.id,
+        en: entry.en,
+        cn: entry.cn,
+        pos: entry.pos,
+        source: WordSource.book,
+        level: entry.level,
+      ),
+    );
+  }
+
+  void cacheBookWords(Iterable<CefrWord> words) {
+    for (final entry in words) {
+      cacheBookWord(entry);
+    }
+  }
+
+  /// Ids referenced by plans / reviews / errors that may need SQL hydrate.
+  Set<String> referencedBookIds() {
+    final ids = <String>{
+      for (final plan in _plans.values) ...[
+        ...plan.newWordIds,
+        ...plan.reviewWordIds,
+        ...plan.errorWordIds,
+      ],
+      ..._errors.keys,
+      ..._reviews.keys,
     };
+    ids.removeWhere((id) {
+      final existing = _words[id];
+      return existing != null && existing.source == WordSource.user;
+    });
+    return ids;
+  }
+
+  /// Load missing book lexemes via [loader] (typically SQLite by id).
+  Future<void> hydrateBookWords(BookWordsByIds loader) async {
+    final missing = [
+      for (final id in referencedBookIds())
+        if (!_words.containsKey(id)) id,
+    ];
+    if (missing.isEmpty) return;
+    cacheBookWords(await loader(missing));
+  }
+
+  int _untaughtInLevelCountSync() {
+    final code = cefrCodeForLevel(level);
+    final used = _taughtNewWordIds;
     var count = 0;
     for (final word in _words.values) {
       if (word.source != WordSource.book) continue;
@@ -414,6 +489,31 @@ class LessonStore {
       count += 1;
     }
     return count;
+  }
+
+  void invalidateUntaughtCount() => _untaughtInLevelCache = null;
+
+  /// Warm or refresh the SQL/RAM untaught count used by nudge + 词本.
+  Future<int> refreshUntaughtInLevelCount() async {
+    final code = cefrCodeForLevel(level);
+    final used = _taughtNewWordIds;
+    final fn = untaughtCountFn;
+    final count = fn != null
+        ? await fn(level: code, exclude: used)
+        : _untaughtInLevelCountSync();
+    _untaughtInLevelCache = count;
+    return count;
+  }
+
+  /// Prefer cached SQL count when [untaughtCountFn] is wired.
+  int untaughtInLevelCount() {
+    final cached = _untaughtInLevelCache;
+    if (cached != null) return cached;
+    if (untaughtCountFn != null) {
+      // SQL mode but cache not warm: avoid false "exhausted" nudge (empty RAM book).
+      return 1;
+    }
+    return _untaughtInLevelCountSync();
   }
 
   /// Next product level, or null at the top band.
@@ -456,6 +556,7 @@ class LessonStore {
     if (next == null) return false;
     level = next;
     upgradeNudgeDismissed = false;
+    _untaughtInLevelCache = null;
     return true;
   }
 
@@ -756,7 +857,14 @@ class LessonStore {
     required String cn,
     required String pos,
   }) {
-    final id = 'u${_words.length + 1}';
+    var n = 1;
+    for (final word in _words.values) {
+      if (word.source == WordSource.user) n += 1;
+    }
+    while (_words.containsKey('u$n')) {
+      n += 1;
+    }
+    final id = 'u$n';
     _words[id] = Lexeme(
       id: id,
       en: en,
@@ -1161,6 +1269,7 @@ class LessonStore {
     _errors.clear();
     _reviews.clear();
     callLog.clear();
+    _untaughtInLevelCache = null;
 
     final plans = json['plans'];
     if (plans is List) {

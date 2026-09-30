@@ -188,11 +188,13 @@ class _SettingsPageState extends State<SettingsPage> {
               values: _levels,
               label: (value) => value,
               selected: level,
-              onPick: (value) {
+              onPick: (value) async {
                 if (store.level != value) {
                   store.level = value;
                   store.upgradeNudgeDismissed = false;
+                  store.invalidateUntaughtCount();
                 }
+                await store.refreshUntaughtInLevelCount();
                 model.commit();
                 setState(() {});
               },

@@ -24,7 +24,7 @@ class _TodayPageState extends State<TodayPage> {
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final store = model.store;
-    final plan = store.ensureTodayPlan();
+    final plan = store.requiredTodayPlan;
     if (!_autoOpened && store.checkedIn && !store.notesDismissed) {
       _autoOpened = true;
       _showNotes = true;

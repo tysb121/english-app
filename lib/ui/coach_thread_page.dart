@@ -38,7 +38,6 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final store = model.store;
-    store.ensureTodayPlan();
     final stage = _stage(store);
     final sceneLoading = (_busy && stage == _Stage.scene) || store.sceneInFlight;
     return SoftScaffold(
@@ -245,7 +244,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   Widget _vocabBlock(AppModel model, LessonStore store) {
-    final ids = store.vocabQueue(store.ensureTodayPlan());
+    final ids = store.vocabQueue(store.requiredTodayPlan);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -274,9 +273,9 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   Widget _dialogueBlock(LessonStore store) {
-    final scene = store.ensureTodayPlan().scene;
+    final scene = store.requiredTodayPlan.scene;
     if (scene == null) return const SizedBox.shrink();
-    final cursor = store.ensureTodayPlan().dialogueCursor;
+    final cursor = store.requiredTodayPlan.dialogueCursor;
     final line = scene.dialogue.isEmpty
         ? null
         : scene.dialogue[cursor.clamp(0, scene.dialogue.length - 1)];
@@ -311,7 +310,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   Widget _sentencesBlock(AppModel model, LessonStore store) {
-    final plan = store.ensureTodayPlan();
+    final plan = store.requiredTodayPlan;
     final total = plan.newWordIds.length;
     final done = store.sentenceDoneCount;
     final wordId = store.currentSentenceWordId;
@@ -348,7 +347,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   Widget _errorsBlock(AppModel model, LessonStore store) {
-    final plan = store.ensureTodayPlan();
+    final plan = store.requiredTodayPlan;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -495,7 +494,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     if (stage == _Stage.sentences) {
       final wordId = store.currentSentenceWordId;
       if (wordId != null) {
-        final total = store.ensureTodayPlan().newWordIds.length;
+        final total = store.requiredTodayPlan.newWordIds.length;
         final ordinal = store.sentenceDoneCount + 1;
         _local.add(_Bubble(role: _BubbleRole.user, text: text));
         final err = await model.gradeSentence(wordId, text);
@@ -528,8 +527,8 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       }
     }
     if (stage == _Stage.dialogue) {
-      final scene = store.ensureTodayPlan().scene;
-      final cursor = store.ensureTodayPlan().dialogueCursor;
+      final scene = store.requiredTodayPlan.scene;
+      final cursor = store.requiredTodayPlan.dialogueCursor;
       final line = scene?.dialogue.isNotEmpty == true
           ? scene!.dialogue[cursor.clamp(0, scene.dialogue.length - 1)]
           : null;
@@ -609,7 +608,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   _Stage _stage(LessonStore store) {
-    final plan = store.ensureTodayPlan();
+    final plan = store.requiredTodayPlan;
     if (!store.vocabThresholdMet) return _Stage.vocab;
     if (!store.sentencesDone) return _Stage.sentences;
     if (plan.scene == null) return _Stage.scene;

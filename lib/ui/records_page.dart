@@ -10,7 +10,6 @@ class RecordsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final store = AppScope.of(context).store;
-    store.ensureTodayPlan();
     final days = store.history;
     return SoftScaffold(
       title: '记录',

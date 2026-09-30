@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'app/app_model.dart';
@@ -13,10 +15,16 @@ import 'ui/english_app.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final secrets = await SecureSecrets().load();
-  final book = await loadCefrCore();
-  final coachDb = await CoachDatabase.open(seedBook: book.entries);
-  final fromDb = await coachDb.loadWordbook();
-  final store = LessonStore(book: fromDb.isNotEmpty ? fromDb : book.entries);
+
+  // Open DB first; skip full JSON/asset parse when wordbook already imported.
+  final coachDb = await CoachDatabase.open();
+  if (await coachDb.wordbookCount() == 0) {
+    final book = await loadCefrCore();
+    await coachDb.ensureWordbook(book.entries);
+  }
+
+  // Keep only user + hydrated book lexemes in RAM (not the full ~5k).
+  final store = LessonStore();
   store.untaughtIdPicker = ({
     required String level,
     required int limit,
@@ -28,6 +36,14 @@ Future<void> main() async {
       exclude: exclude,
     );
   };
+  store.untaughtCountFn = ({
+    required String level,
+    required Set<String> exclude,
+  }) {
+    return coachDb.untaughtCount(level: level, exclude: exclude);
+  };
+  store.bookWordsByIds = coachDb.wordsByIds;
+
   final shell = ProgressShell(store: store, chat: ChatThread());
 
   final hadSqlite = await coachDb.hasProgress();
@@ -43,13 +59,23 @@ Future<void> main() async {
 
   // Freeze today's plan via SQL untaught pick before first frame.
   await store.ensureTodayPlanAsync();
+  await store.hydrateBookWords(coachDb.wordsByIds);
+  await store.refreshUntaughtInLevelCount();
 
+  Timer? persistDebounce;
   Future<void> persist() async {
     try {
       await coachDb.saveShell(shell);
     } on Object {
       // Disk errors must not roll back in-memory answers.
     }
+  }
+
+  void schedulePersist() {
+    persistDebounce?.cancel();
+    persistDebounce = Timer(const Duration(milliseconds: 400), () {
+      unawaited(persist());
+    });
   }
 
   final model = AppModel(
@@ -64,8 +90,8 @@ Future<void> main() async {
     tokenHubModel: secrets.tokenHubModel,
     unlocked: secrets.deepSeekKey.trim().isNotEmpty,
     persistProgress: (_) {
-      // Fire-and-forget; AppModel.commit already swallows sync errors.
-      persist();
+      // Debounce full SQLite rewrites on rapid vocab taps.
+      schedulePersist();
     },
     persistSecrets: SecureSecrets().save,
   );

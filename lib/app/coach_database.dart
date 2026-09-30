@@ -12,7 +12,7 @@ import 'local_progress.dart';
 import 'progress_shell.dart';
 
 const coachDbFileName = 'english_coach.db';
-const coachSchemaVersion = 1;
+const coachSchemaVersion = 2;
 
 bool _factoryReady = false;
 
@@ -59,7 +59,9 @@ class CoachDatabase {
           await _createSchema(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
-          // v1: no upgrades yet.
+          if (oldVersion < 2) {
+            await _ensureWordbookIndexes(db);
+          }
         },
       ),
     );
@@ -147,13 +149,24 @@ CREATE TABLE chat_checkpoints (
   payload TEXT NOT NULL
 )''');
     await db.insert('meta', {'key': 'schema', 'value': '$coachSchemaVersion'});
+    await _ensureWordbookIndexes(db);
+  }
+
+  static Future<void> _ensureWordbookIndexes(Database db) async {
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_wordbook_level ON wordbook(level)',
+    );
+  }
+
+  Future<int> wordbookCount() async {
+    return Sqflite.firstIntValue(
+          await db.rawQuery('SELECT COUNT(*) FROM wordbook'),
+        ) ??
+        0;
   }
 
   Future<void> ensureWordbook(List<CefrWord> words) async {
-    final count = Sqflite.firstIntValue(
-      await db.rawQuery('SELECT COUNT(*) FROM wordbook'),
-    );
-    if (count != null && count > 0) return;
+    if (await wordbookCount() > 0) return;
     final batch = db.batch();
     for (final w in words) {
       batch.insert('wordbook', {
@@ -171,16 +184,52 @@ CREATE TABLE chat_checkpoints (
   Future<List<CefrWord>> loadWordbook() async {
     final rows = await db.query('wordbook', orderBy: 'id');
     return [
-      for (final row in rows)
-        CefrWord(
-          id: row['id']! as String,
-          en: row['en']! as String,
-          cn: row['cn']! as String,
-          pos: row['pos']! as String,
-          level: row['level']! as String,
-          bookId: row['book_id']! as String,
-        ),
+      for (final row in rows) _rowToWord(row),
     ];
+  }
+
+  CefrWord _rowToWord(Map<String, Object?> row) {
+    return CefrWord(
+      id: row['id']! as String,
+      en: row['en']! as String,
+      cn: row['cn']! as String,
+      pos: row['pos']! as String,
+      level: row['level']! as String,
+      bookId: row['book_id']! as String,
+    );
+  }
+
+  /// Load one lemma by id (lazy Lexeme hydrate).
+  Future<CefrWord?> wordById(String id) async {
+    final rows = await db.query(
+      'wordbook',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _rowToWord(rows.first);
+  }
+
+  /// Batch load lemmas by id; missing ids are omitted.
+  Future<List<CefrWord>> wordsByIds(List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    final unique = ids.toSet().toList();
+    final out = <CefrWord>[];
+    const chunkSize = 900;
+    for (var i = 0; i < unique.length; i += chunkSize) {
+      final chunk = unique.sublist(i, min(i + chunkSize, unique.length));
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      final rows = await db.rawQuery(
+        'SELECT id, en, cn, pos, level, book_id FROM wordbook '
+        'WHERE id IN ($placeholders)',
+        chunk,
+      );
+      for (final row in rows) {
+        out.add(_rowToWord(row));
+      }
+    }
+    return out;
   }
 
   /// Random untaught book ids for [level] (a1|a2|b1), excluding [exclude].
@@ -192,6 +241,23 @@ CREATE TABLE chat_checkpoints (
     Random? random,
   }) async {
     if (limit <= 0) return [];
+    if (exclude.isEmpty) {
+      final rows = await db.rawQuery(
+        'SELECT id FROM wordbook WHERE level = ? ORDER BY RANDOM() LIMIT ?',
+        [level, limit],
+      );
+      return [for (final row in rows) row['id']! as String];
+    }
+    if (exclude.length <= 900) {
+      final placeholders = List.filled(exclude.length, '?').join(',');
+      final rows = await db.rawQuery(
+        'SELECT id FROM wordbook WHERE level = ? AND id NOT IN ($placeholders) '
+        'ORDER BY RANDOM() LIMIT ?',
+        [level, ...exclude, limit],
+      );
+      return [for (final row in rows) row['id']! as String];
+    }
+    // Large exclude: filter in Dart after a SQL level scan of ids only.
     final rows = await db.query(
       'wordbook',
       columns: ['id'],
@@ -206,24 +272,60 @@ CREATE TABLE chat_checkpoints (
     return pool.take(limit).toList();
   }
 
+  /// SQL COUNT of book lemmas in [level] not listed in [exclude].
   Future<int> untaughtCount({
     required String level,
     required Set<String> exclude,
   }) async {
-    final rows = await db.query(
-      'wordbook',
-      columns: ['id'],
-      where: 'level = ?',
-      whereArgs: [level],
-    );
-    var n = 0;
-    for (final row in rows) {
-      if (!exclude.contains(row['id'])) n += 1;
+    if (exclude.isEmpty) {
+      return Sqflite.firstIntValue(
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM wordbook WHERE level = ?',
+              [level],
+            ),
+          ) ??
+          0;
     }
-    return n;
+    if (exclude.length <= 900) {
+      final placeholders = List.filled(exclude.length, '?').join(',');
+      return Sqflite.firstIntValue(
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM wordbook WHERE level = ? '
+              'AND id NOT IN ($placeholders)',
+              [level, ...exclude],
+            ),
+          ) ??
+          0;
+    }
+    final total =
+        Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM wordbook WHERE level = ?',
+            [level],
+          ),
+        ) ??
+        0;
+    var taughtInLevel = 0;
+    final list = exclude.toList();
+    const chunkSize = 900;
+    for (var i = 0; i < list.length; i += chunkSize) {
+      final chunk = list.sublist(i, min(i + chunkSize, list.length));
+      final placeholders = List.filled(chunk.length, '?').join(',');
+      taughtInLevel +=
+          Sqflite.firstIntValue(
+            await db.rawQuery(
+              'SELECT COUNT(*) FROM wordbook WHERE level = ? '
+              'AND id IN ($placeholders)',
+              [level, ...chunk],
+            ),
+          ) ??
+          0;
+    }
+    final left = total - taughtInLevel;
+    return left < 0 ? 0 : left;
   }
 
-  Future<void> saveShell(ProgressShell shell) async {
+    Future<void> saveShell(ProgressShell shell) async {
     final lesson = shell.store.toJson();
     final chat = shell.chat.toJson();
     await db.transaction((txn) async {

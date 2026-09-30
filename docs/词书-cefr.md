@@ -66,7 +66,8 @@
 
 ## 代码现状
 
-- `lib/data/cefr_core.dart`：数据类 + `rootBundle` 加载器。
-- `main.dart` 启动时 `loadCefrCore()`，注入 `LessonStore(book: entries)`。
+- `lib/data/cefr_core.dart`：数据类 + `rootBundle` 加载器（仅首启灌库时用）。
+- `main.dart`：若 `wordbook` 表已有数据则跳过 JSON；`LessonStore` 按 id 从 SQLite 懒加载 lexeme，不常驻全量 ~5k。
+- 抽词 / 未教计数：`CoachDatabase.pickUntaughtIds` / `untaughtCount`（SQL）。
 - 水平：入门=A1 / 基础=A2 / 进阶=B1；当天未教词中随机，计划冻住后改水平明天生效。
 - `lib/data/seed_words.dart` 已删除。

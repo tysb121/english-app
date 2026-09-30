@@ -11,7 +11,7 @@ class WordsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final store = model.store;
-    final plan = store.ensureTodayPlan();
+    final plan = store.requiredTodayPlan;
     final todayIds = [
       ...plan.newWordIds,
       ...plan.reviewWordIds,

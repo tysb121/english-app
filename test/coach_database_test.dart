@@ -192,17 +192,67 @@ void main() {
         random: StableRandom(),
       );
     };
+    store.bookWordsByIds = coach.wordsByIds;
+    store.untaughtCountFn = ({
+      required String level,
+      required Set<String> exclude,
+    }) {
+      return coach.untaughtCount(level: level, exclude: exclude);
+    };
     final plan = await store.ensureTodayPlanAsync();
     expect(sqlCalls, 1);
     expect(plan.newWordIds, hasLength(5));
     for (final id in plan.newWordIds) {
       expect(id, startsWith('cc_a1_'));
+      expect(store.word(id), isNotNull);
+      expect(store.word(id)!.level, 'a1');
     }
+    // Only today's slots hydrated — not the full fixture book.
+    expect(store.cachedLexemeCount, lessThan(cefrFixture.length));
+    expect(store.untaughtInLevelCount(), 10);
     // Frozen: second call does not hit SQL again.
     final again = await store.ensureTodayPlanAsync();
     expect(sqlCalls, 1);
     expect(again.newWordIds, plan.newWordIds);
     await coach.close();
+  });
+
+  test('SQL untaughtCount and wordsByIds avoid full book scan in RAM', () async {
+    final dbPath = p.join(tmp.path, 't6.db');
+    final coach = await CoachDatabase.open(
+      path: dbPath,
+      seedBook: cefrFixture,
+    );
+    expect(await coach.wordbookCount(), cefrFixture.length);
+
+    final a1 = cefrFixture.where((w) => w.level == 'a1').map((w) => w.id).toSet();
+    expect(await coach.untaughtCount(level: 'a1', exclude: {}), a1.length);
+    expect(
+      await coach.untaughtCount(level: 'a1', exclude: {a1.first}),
+      a1.length - 1,
+    );
+    expect(await coach.untaughtCount(level: 'a1', exclude: a1), 0);
+
+    final one = await coach.wordById('cc_a1_hello_noun_ce4a5e');
+    expect(one?.en, 'hello');
+    final batch = await coach.wordsByIds([
+      'cc_a1_hello_noun_ce4a5e',
+      'missing_id',
+      'cc_b1_abandon_verb_bb6626',
+    ]);
+    expect(batch.map((w) => w.id).toSet(), {
+      'cc_a1_hello_noun_ce4a5e',
+      'cc_b1_abandon_verb_bb6626',
+    });
+
+    // Second open skips re-seed when wordbook already present.
+    await coach.close();
+    final coach2 = await CoachDatabase.open(
+      path: dbPath,
+      seedBook: cefrFixture,
+    );
+    expect(await coach2.wordbookCount(), cefrFixture.length);
+    await coach2.close();
   });
 
 }

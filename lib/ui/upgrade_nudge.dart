@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../app/app_model.dart';
 import '../engine/lesson_store.dart';
 import 'english_app.dart';
 import 'theme.dart';
@@ -43,8 +42,9 @@ class UpgradeNudgeCard extends StatelessWidget {
             children: [
               Expanded(
                 child: FilledButton(
-                  onPressed: () {
+                  onPressed: () async {
                     store.acceptLevelUpgrade();
+                    await store.refreshUntaughtInLevelCount();
                     model.commit();
                   },
                   child: Text('升到$next'),
