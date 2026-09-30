@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>今日英语 · 交互原型</title>
+<title>今日英语 · 产品原型</title>
 <style>
   :root {
     --paper: #f6f4ef;
@@ -13,6 +13,7 @@
     --red: #8e2f2f;
     --line: #e3ddd2;
     --white: #fffcf7;
+    --muted: #4e4a43;
   }
   * { box-sizing: border-box; }
   body {
@@ -50,19 +51,16 @@
     padding: 0 18px;
     font-size: 12px;
     color: #5c584f;
+    flex: none;
   }
   header.app {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 4px 18px 10px;
+    padding: 2px 18px 8px;
+    flex: none;
   }
-  header.app h1 {
-    margin: 0;
-    font-size: 20px;
-    font-weight: 650;
-    letter-spacing: 0;
-  }
+  header.app h1 { margin: 0; font-size: 20px; font-weight: 650; }
   header.app button, .textish {
     border: 0;
     background: transparent;
@@ -72,43 +70,25 @@
     padding: 6px 0;
     cursor: pointer;
   }
-  .body {
-    flex: 1;
-    overflow: auto;
-    padding: 4px 18px 18px;
-  }
-  .lead {
-    font-size: 28px;
-    line-height: 1.35;
-    margin: 12px 0 8px;
-    font-weight: 650;
-  }
-  .sub {
-    margin: 0 0 18px;
-    color: #4e4a43;
-    font-size: 16px;
-    line-height: 1.5;
-  }
-  .choice {
+  .body { flex: 1; overflow: auto; padding: 4px 18px 16px; }
+  .lead { font-size: 28px; line-height: 1.35; margin: 8px 0 8px; font-weight: 650; }
+  .sub { margin: 0 0 16px; color: var(--muted); font-size: 15px; line-height: 1.5; }
+  .choice, .rowbtn {
     width: 100%;
     text-align: left;
     border: 1px solid var(--line);
     background: var(--white);
     border-radius: 16px;
-    padding: 16px 16px 14px;
+    padding: 14px 16px;
     margin-bottom: 10px;
     cursor: pointer;
     color: var(--ink);
     font: inherit;
   }
-  .choice strong { display: block; font-size: 18px; margin-bottom: 4px; }
-  .choice span { color: #4e4a43; font-size: 15px; line-height: 1.45; }
+  .choice strong, .rowbtn strong { display: block; font-size: 18px; margin-bottom: 4px; }
+  .choice span, .rowbtn span { color: var(--muted); font-size: 15px; line-height: 1.45; }
   .choice em { font-style: normal; color: var(--pine); }
-  label.field {
-    display: block;
-    font-size: 14px;
-    margin-bottom: 8px;
-  }
+  label.field { display: block; font-size: 14px; margin: 12px 0 8px; }
   input[type="password"], input[type="text"] {
     width: 100%;
     border: 1px solid #d9d2c6;
@@ -128,26 +108,33 @@
     font-weight: 650;
     cursor: pointer;
   }
-  .primary {
-    border: 0;
-    background: var(--pine);
-    color: white;
-    margin-top: 14px;
-  }
+  .primary { border: 0; background: var(--pine); color: white; margin-top: 14px; }
   .primary:disabled { background: #9db8ab; cursor: default; }
-  .ghost {
-    border: 0;
-    background: transparent;
-    color: var(--ink);
-    margin-top: 4px;
-  }
-  .note {
-    margin-top: 12px;
-    font-size: 16px;
-    line-height: 1.45;
-  }
+  .ghost { border: 0; background: transparent; color: var(--ink); margin-top: 4px; }
+  .note { margin-top: 12px; font-size: 16px; line-height: 1.45; }
   .note.ok { color: var(--pine); }
   .note.bad { color: var(--red); }
+  .hint { margin-top: 10px; color: #6d685f; font-size: 13px; line-height: 1.45; }
+  .toprow { display: flex; justify-content: space-between; align-items: flex-start; margin-top: 6px; }
+  .date { font-size: 26px; font-weight: 650; }
+  .flag { color: var(--pine); font-size: 14px; margin-top: 4px; min-height: 18px; }
+  .streak { color: var(--muted); font-size: 15px; padding-top: 8px; }
+  .marks { display: flex; gap: 18px; margin: 16px 0 6px; }
+  .marks span { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #6d685f; }
+  .marks i { width: 11px; height: 11px; border-radius: 50%; border: 1.5px solid #b7b1a6; display: inline-block; }
+  .marks span.on { color: var(--ink); }
+  .marks span.on i { background: var(--pine); border-color: var(--pine); }
+  .section { margin: 12px 0 6px; font-size: 14px; color: #6d685f; font-weight: 650; }
+  .phrase {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 16px;
+  }
+  .phrase b { font-weight: 600; text-align: right; }
+  .extra { margin-top: 12px; color: var(--muted); font-size: 14px; }
   .thread { display: flex; flex-direction: column; gap: 12px; padding-bottom: 8px; }
   .bubble {
     max-width: 92%;
@@ -157,37 +144,20 @@
     line-height: 1.5;
     white-space: pre-wrap;
   }
-  .coach {
-    align-self: flex-start;
-    background: white;
-    border: 1px solid var(--line);
-  }
-  .coach .who, .mine .who {
-    display: block;
-    font-size: 12px;
-    letter-spacing: 0.04em;
-    margin-bottom: 4px;
-    color: #6d685f;
-  }
-  .mine {
-    align-self: flex-end;
-    background: var(--pine-soft);
-  }
-  .fix { color: var(--red); }
-  .ok { color: var(--pine); }
+  .coach { align-self: flex-start; background: white; border: 1px solid var(--line); }
+  .mine { align-self: flex-end; background: var(--pine-soft); }
+  .who { display: block; font-size: 12px; margin-bottom: 4px; color: #6d685f; }
+  .step { font-size: 13px; color: #6d685f; margin: 0 18px 6px; flex: none; }
   .composer {
     border-top: 1px solid var(--line);
     padding: 10px 12px 16px;
     display: flex;
     gap: 8px;
     background: var(--paper);
+    flex: none;
   }
-  .composer input {
-    flex: 1;
-    border-radius: 22px;
-    padding: 12px 14px;
-  }
-  .composer button {
+  .composer input { flex: 1; border-radius: 22px; padding: 12px 14px; }
+  .composer button, .bridge button {
     border: 0;
     background: var(--pine);
     color: white;
@@ -197,6 +167,15 @@
     font-weight: 650;
     cursor: pointer;
   }
+  .bridge {
+    border-top: 1px solid var(--line);
+    padding: 10px 12px 16px;
+    display: flex;
+    gap: 8px;
+    background: var(--paper);
+    flex: none;
+  }
+  .bridge button.alt { background: white; color: var(--ink); border: 1px solid var(--line); }
   .sheet {
     position: absolute;
     left: 0; right: 0; bottom: 0;
@@ -207,17 +186,64 @@
   }
   .sheet h2 { margin: 0 0 8px; font-size: 18px; }
   .sheet p { margin: 0 0 8px; line-height: 1.5; font-size: 15px; }
-  .row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-  .word {
-    padding: 12px 0;
-    border-bottom: 1px solid var(--line);
+  .sheet .row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--line);
+    background: #fbf9f4;
+    padding: 4px 0 10px;
+    flex: none;
   }
-  .word b { font-size: 17px; font-weight: 650; }
-  .word span { display: block; color: #4e4a43; margin-top: 2px; }
-  .step {
+  .nav button {
+    border: 0;
+    background: transparent;
+    font: inherit;
     font-size: 13px;
     color: #6d685f;
-    margin: 0 18px 6px;
+    padding: 8px 0 4px;
+    cursor: pointer;
+  }
+  .nav button.on { color: var(--pine); font-weight: 700; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 4px 0 8px; }
+  .stat {
+    background: white;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 12px 8px;
+    text-align: center;
+  }
+  .stat b { display: block; font-size: 22px; font-weight: 650; }
+  .stat span { color: #6d685f; font-size: 12px; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+  .dow { font-size: 12px; color: #6d685f; padding: 6px 0; }
+  .day {
+    height: 36px;
+    border: 0;
+    background: transparent;
+    border-radius: 50%;
+    font: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .day.solid { background: var(--pine); color: white; }
+  .day.hollow { box-shadow: inset 0 0 0 1.5px var(--pine); color: var(--pine); }
+  .day:disabled { color: var(--ink); cursor: default; }
+  .seg { display: flex; background: white; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 8px; }
+  .seg button { flex: 1; border: 0; border-right: 1px solid var(--line); background: transparent; font: inherit; font-size: 13px; padding: 10px 4px; cursor: pointer; color: var(--ink); }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: var(--pine); color: white; }
+  .block { margin-bottom: 8px; }
+  .fold {
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    font: inherit;
+    color: var(--ink);
+    padding: 8px 0;
+    cursor: pointer;
   }
 </style>
 </head>
@@ -233,6 +259,7 @@ const bands = {
     name: "新手",
     blurb: "从今天能说出口的短句开始。",
     example: "I'm running late.",
+    exampleCn: "要迟到了",
     words: [
       ["I'm running late.", "要迟到了"],
       ["sounds good", "可以"],
@@ -244,12 +271,19 @@ const bands = {
     lineEn: "Can we start without you?",
     lineCn: "我们可以先开始吗？",
     better: "I'll be running late, but you can start.",
-    quizCn: "我确认一下"
+    grammar: "迟到用 I'm running late，不说 I am lateing。",
+    quizzes: [
+      { ask: "考核 1/4\n把「我确认一下」说成英文。", need: ["let me check"] },
+      { ask: "考核 2/4\n把「我稍后回复你」说成英文。", need: ["get back to you"] },
+      { ask: "考核 3/4\n对方说：Can we start without you?\n用英文接一句。", need: ["start"] },
+      { ask: "考核 4/4\n用 sounds good 和 keep me posted 说一句。", need: ["sounds good", "keep me posted"] }
+    ]
   },
   work: {
     name: "简单工作对话",
     blurb: "从开会里常说的那几句开始。",
-    example: "Let's sync up.",
+    example: "Let's start the standup.",
+    exampleCn: "我们开始站会。",
     words: [
       ["standup", "站会"],
       ["deadline", "截止日期"],
@@ -261,12 +295,19 @@ const bands = {
     lineEn: "Any blocker before the standup?",
     lineCn: "站会前有阻碍吗？",
     better: "No blocker. I'll follow up after the standup.",
-    quizCn: "跟进"
+    grammar: "follow up 是跟进，后面可以接人或事情。",
+    quizzes: [
+      { ask: "考核 1/4\n把「跟进」说成英文。", need: ["follow up"] },
+      { ask: "考核 2/4\n把「站会」说成英文。", need: ["standup"] },
+      { ask: "考核 3/4\n对方说：Any blocker before the standup?\n用英文接一句。", need: ["blocker"] },
+      { ask: "考核 4/4\n用 deadline 和 sync up 说一句。", need: ["deadline", "sync up"] }
+    ]
   },
   long: {
     name: "更长的表达",
     blurb: "词可以难一点，让你连着说两句。",
-    example: "Can we take this offline?",
+    example: "Let's take this offline.",
+    exampleCn: "会下再说。",
     words: [
       ["take this offline", "会下再说"],
       ["stakeholder", "相关方"],
@@ -278,9 +319,23 @@ const bands = {
     lineEn: "This looks out of scope.",
     lineCn: "这看起来不在范围内。",
     better: "This is out of scope. Let's take this offline and check with the stakeholder.",
-    quizCn: "会下再说"
+    grammar: "take this offline 是先停在会上，换到会下再谈。",
+    quizzes: [
+      { ask: "考核 1/4\n把「会下再说」说成英文。", need: ["take this offline"] },
+      { ask: "考核 2/4\n把「不在范围内」说成英文。", need: ["out of scope"] },
+      { ask: "考核 3/4\n对方说：This looks out of scope.\n用英文接一句。", need: ["offline"] },
+      { ask: "考核 4/4\n用 stakeholder 和 alignment 说一句。", need: ["stakeholder", "alignment"] }
+    ]
   }
 };
+
+const laterWords = [
+  ["due today", "今天到期"],
+  ["as soon as possible", "尽快"],
+  ["out of office", "不在办公室"],
+  ["lunch break", "午休"],
+  ["wrap up", "收尾"]
+];
 
 const state = {
   view: "level",
@@ -289,18 +344,38 @@ const state = {
   busy: false,
   connected: false,
   message: "",
+  started: false,
   phase: "warmup",
   found: [],
   messages: [],
   draft: "",
-  sheet: null
+  sheet: false,
+  notesSaved: false,
+  notesDismissed: false,
+  checkedIn: false,
+  talkDone: false,
+  quizAt: 0,
+  quizDone: false,
+  readOnly: false,
+  grammarSeen: false,
+  word: null,
+  custom: [],
+  adding: false,
+  daily: 5,
+  goal: "职场",
+  tone: "简洁",
+  nextLevel: "",
+  translateOpen: false,
+  prefNote: ""
 };
 
 const screen = document.getElementById("screen");
 
-function norm(value) {
-  return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
+function band() { return bands[state.band]; }
+function norm(value) { return value.trim().toLowerCase().replace(/\s+/g, " "); }
+function vocabPassed() { return state.found.length >= 4; }
+function streak() { return state.checkedIn ? 1 : 0; }
+function learnedCount() { return state.checkedIn ? 5 : state.found.length; }
 
 function statusBar() {
   return '<div class="status"><span>9:41</span><span>今日英语</span></div>';
@@ -308,70 +383,94 @@ function statusBar() {
 
 function header(action, label) {
   const side = label
-    ? '<button type="button" data-go="' + action + '">' + label + '</button>'
+    ? '<button type="button" data-go="' + action + '">' + label + "</button>"
     : "<span></span>";
   return statusBar() + '<header class="app"><h1>今日英语</h1>' + side + "</header>";
+}
+
+function nav(tab) {
+  const items = [["today", "今天"], ["words", "词"], ["records", "记录"], ["mine", "我的"]];
+  return '<nav class="nav">' + items.map(([id, name]) =>
+    '<button type="button" data-go="' + id + '"' + (id === tab ? ' class="on"' : "") + ">" + name + "</button>"
+  ).join("") + "</nav>";
 }
 
 function render() {
   if (state.view === "level") renderLevel();
   else if (state.view === "key") renderKey();
-  else if (state.view === "words") renderWords();
-  else renderChat();
+  else if (state.view === "thread") renderThread();
+  else if (state.view === "word") renderWord();
+  else if (state.view === "day") renderDay();
+  else renderShell();
   screen.querySelectorAll("[data-go]").forEach((node) => {
-    node.addEventListener("click", () => {
-      const go = node.getAttribute("data-go");
-      if (go === "level") {
-        state.view = "level";
-      } else if (go === "reset") {
-        state.view = "level";
-        state.band = null;
-        state.connected = false;
-        state.message = "";
-        state.messages = [];
-        state.found = [];
-        state.phase = "warmup";
-        state.sheet = null;
-        state.draft = "";
-      } else if (go === "chat" || go === "words") {
-        state.view = go;
-        state.sheet = null;
-      }
-      render();
-    });
+    node.addEventListener("click", () => go(node.getAttribute("data-go")));
   });
 }
 
+function go(target) {
+  if (target === "level") {
+    state.view = "level";
+  } else if (target === "today" || target === "words" || target === "records" || target === "mine") {
+    state.view = target;
+    state.readOnly = false;
+    state.word = null;
+    state.adding = false;
+  } else if (target === "close") {
+    if (state.sheet) {
+      state.sheet = false;
+      state.notesDismissed = true;
+      state.checkedIn = true;
+    }
+    state.view = "today";
+    state.readOnly = false;
+  } else if (target === "review") {
+    state.view = "thread";
+    state.readOnly = true;
+    state.sheet = false;
+  } else if (target === "start") {
+    openThread(false);
+  }
+  render();
+}
+
 function renderLevel() {
-  screen.innerHTML = header("reset", "") +
-    '<div class="body"><p class="lead">你现在说到哪一步？</p><p class="sub">选一次就记住。今天的词从这一档里取，以后可以在设置里改，从下一天生效。</p>' +
-    Object.entries(bands).map(([id, band]) =>
-      '<button class="choice" data-band="' + id + '"><strong>' + band.name + '</strong><span>' + band.blurb + '<br><em>' + band.example + '</em></span></button>'
-    ).join("") +
-    '</div>';
+  screen.innerHTML = header("", "") +
+    '<div class="body"><p class="lead">你现在说到哪一步？</p><p class="sub">选一次就记住。今天的说法从这一档里取。以后在「我的」里改，从下一天生效。</p>' +
+    Object.entries(bands).map(([id, item]) =>
+      '<button class="choice" data-band="' + id + '"><strong>' + item.name + "</strong><span>" + item.blurb + "<br><em>" + item.example + "</em> " + item.exampleCn + "</span></button>"
+    ).join("") + "</div>";
   screen.querySelectorAll("[data-band]").forEach((node) => {
     node.addEventListener("click", () => {
       state.band = node.getAttribute("data-band");
       state.view = "key";
       state.message = "";
+      state.connected = false;
       render();
     });
   });
 }
 
 function renderKey() {
-  const band = bands[state.band];
+  const item = band();
   screen.innerHTML = header("level", "上一步") +
-    '<div class="body"><p class="lead">填 DeepSeek 密钥</p><p class="sub">已选「' + band.name + '」。密钥只留在这台手机上。连上之后才开始今天的课。</p>' +
+    '<div class="body"><p class="lead">填 DeepSeek 密钥</p><p class="sub">已选「' + item.name + "」。密钥只留在这台手机上。</p>" +
     '<label class="field">DeepSeek 密钥</label><input id="key" type="password" placeholder="粘贴密钥" value="' + escapeAttr(state.key) + '" />' +
-    '<button class="primary" id="test" ' + (state.busy ? "disabled" : "") + '>' + (state.connected ? "开始今天" : (state.busy ? "正在测试" : "测试连接")) + '</button>' +
-    (state.message ? '<p class="note ' + (state.connected ? "ok" : "bad") + '">' + state.message + '</p>' : "") +
-    '<p class="sub" style="margin-top:22px">这是原型。测试不会真的访问网络。</p></div>';
+    '<button class="primary" id="test"' + (state.busy ? " disabled" : "") + ">" +
+    (state.connected ? "开始今天" : (state.busy ? "正在测试" : "测试连接")) + "</button>" +
+    (state.message ? '<p class="note ' + (state.message === "已连通" || state.message === "正在测试" ? "ok" : "bad") + '">' + state.message + "</p>" : "") +
+    '<button class="fold" id="fold" type="button">' + (state.translateOpen ? "收起参考翻译" : "参考翻译，可以以后再填") + "</button>" +
+    (state.translateOpen ? '<p class="sub">TokenHub 密钥不填也能开始。原型里不发送。</p>' : "") +
+    '<p class="hint">这是原型。测试不会真的访问网络。</p></div>';
   const input = document.getElementById("key");
   input.addEventListener("input", () => { state.key = input.value; });
+  document.getElementById("fold").addEventListener("click", () => {
+    state.translateOpen = !state.translateOpen;
+    render();
+  });
   document.getElementById("test").addEventListener("click", () => {
     if (state.connected) {
-      startLesson();
+      state.view = "today";
+      render();
       return;
     }
     state.key = input.value;
@@ -394,26 +493,255 @@ function renderKey() {
   });
 }
 
-function startLesson() {
-  const band = bands[state.band];
-  state.view = "chat";
-  state.phase = "warmup";
-  state.found = [];
-  state.sheet = null;
-  state.messages = [{
-    role: "coach",
-    text: "今天先说「" + band.scene + "」。\n这五个：\n" + band.words.map((word) => word[1]).join("\n") + "\n用英文回我。一次写一句也行。"
-  }];
+function renderShell() {
+  const tab = state.view;
+  let body = "";
+  if (tab === "today") body = todayHtml();
+  else if (tab === "words") body = wordsHtml();
+  else if (tab === "records") body = recordsHtml();
+  else body = mineHtml();
+  screen.innerHTML = header("", "") + '<div class="body">' + body + "</div>" + nav(tab);
+  bindShell();
+}
+
+function todayHtml() {
+  const item = band();
+  const marks = [
+    ["认词", vocabPassed()],
+    ["对话", state.talkDone],
+    ["考核", state.quizDone]
+  ];
+  const lines = item.words.map((word, index) => {
+    const known = state.found.includes(index);
+    return '<div class="phrase"><span>' + escapeHtml(word[1]) + "</span>" +
+      (known ? "<b>" + escapeHtml(word[0]) + "</b>" : "") + "</div>";
+  }).join("");
+  return '<div class="toprow"><div><div class="date">9月30日</div><div class="flag">' +
+    (state.checkedIn ? "已完成" : "") + '</div></div><div class="streak">连续 ' + streak() + " 天</div></div>" +
+    '<div class="marks">' + marks.map(([name, on]) =>
+      '<span' + (on ? ' class="on"' : "") + "><i></i>" + name + "</span>"
+    ).join("") + "</div>" +
+    '<button class="primary" id="cta" type="button">' + ctaLabel() + "</button>" +
+    '<div class="section">今天的 5 个说法</div>' + lines;
+}
+
+function ctaLabel() {
+  if (!state.started) return "开始今天";
+  if (state.checkedIn) return "回看今天";
+  if (!vocabPassed()) return "继续认词";
+  if (!state.talkDone && state.phase === "warmup") return "正在写今天的场景";
+  if (!state.talkDone) return "继续对话";
+  if (!state.quizDone) return "继续考核";
+  return "回看今天";
+}
+
+function wordsHtml() {
+  const item = band();
+  const today = item.words.map((word, index) =>
+    '<button class="rowbtn" data-word="today:' + index + '"><strong>' + escapeHtml(word[1]) +
+    "</strong><span>" + (state.found.includes(index) ? escapeHtml(word[0]) + " · 今天" : "今天") + "</span></button>"
+  ).join("");
+  const rest = laterWords
+    .filter((word) => !item.words.some((own) => own[0] === word[0]))
+    .map((word, index) =>
+      '<button class="rowbtn" data-word="later:' + index + '"><strong>' + escapeHtml(word[1]) +
+      "</strong><span>" + escapeHtml(word[0]) + " · 还没到</span></button>"
+    ).join("");
+  const custom = state.custom.map((word, index) =>
+    '<button class="rowbtn" data-word="custom:' + index + '"><strong>' + escapeHtml(word[1]) +
+    "</strong><span>" + escapeHtml(word[0]) + " · 从明天开始练</span></button>"
+  ).join("");
+  const form = state.adding
+    ? '<label class="field">英文</label><input id="add-en" type="text" />' +
+      '<label class="field">中文</label><input id="add-cn" type="text" />' +
+      '<label class="field">词性</label><input id="add-pos" type="text" placeholder="短语" />' +
+      '<button class="primary" id="save-word" type="button">保存</button>'
+    : '<button class="primary" id="add" type="button">添加</button>';
+  return '<p class="lead">词</p><p class="sub">先是今天的说法，再是以后会学的。</p>' + form +
+    '<div class="section">今天</div>' + today +
+    '<div class="section">以后</div>' + custom + rest;
+}
+
+function recordsHtml() {
+  if (!state.started) {
+    return '<p class="lead">记录</p><p class="sub">还没有记录。完成今天之后会出现在这里。</p>';
+  }
+  const head = ["一", "二", "三", "四", "五", "六", "日"].map((name) => '<div class="dow">' + name + "</div>").join("");
+  let cells = '<button class="day" type="button" disabled></button>';
+  for (let day = 1; day <= 30; day += 1) {
+    const klass = day === 30 ? (state.checkedIn ? "solid" : "hollow") : "";
+    const disabled = day === 30 ? "" : " disabled";
+    cells += '<button class="day ' + klass + '" type="button" data-day="' + day + '"' + disabled + ">" + day + "</button>";
+  }
+  return '<p class="lead">记录</p>' +
+    '<div class="stats"><div class="stat"><b>' + streak() + '</b><span>连续天数</span></div>' +
+    '<div class="stat"><b>' + (state.checkedIn ? 1 : 0) + '</b><span>本月完成</span></div>' +
+    '<div class="stat"><b>' + (state.checkedIn ? 1 : 0) + '</b><span>累计完成</span></div></div>' +
+    '<div class="section">2026年9月</div><div class="cal">' + head + cells + "</div>" +
+    '<p class="hint">实心是打过卡的日子。空心是打开过、还没打卡。</p>';
+}
+
+function mineHtml() {
+  return '<p class="lead">我的</p>' +
+    '<div class="stats"><div class="stat"><b>' + (state.checkedIn ? 1 : 0) + '</b><span>累计完成</span></div>' +
+    '<div class="stat"><b>' + streak() + '</b><span>连续天数</span></div>' +
+    '<div class="stat"><b>' + learnedCount() + '</b><span>在学的词</span></div></div>' +
+    '<div class="block"><div class="section">每天新词</div>' + seg("daily", [5, 10, 15, 20], state.daily) + "</div>" +
+    '<div class="block"><div class="section">水平</div>' + seg("level", ["新手", "简单工作对话", "更长的表达"], state.nextLevel || band().name) + "</div>" +
+    '<div class="block"><div class="section">目标</div>' + seg("goal", ["职场", "日常", "考试", "都要"], state.goal) + "</div>" +
+    '<div class="block"><div class="section">语气</div>' + seg("tone", ["简洁", "朋友", "老师"], state.tone) + "</div>" +
+    (state.prefNote ? '<p class="hint">' + state.prefNote + "</p>" : '<p class="hint">已经开始的今天不变，这些改动从明天生效。</p>') +
+    '<div class="section">连接</div><p class="sub" style="margin-bottom:8px">DeepSeek · ' + (state.connected ? "已连通" : "未测试") + "</p>" +
+    '<button class="ghost" id="retest" type="button">测试连接</button>' +
+    '<p class="hint">学习记录只在这台手机上，卸载即删除。没有账号，也没有提醒开关。</p>';
+}
+
+function seg(name, values, current) {
+  return '<div class="seg">' + values.map((value) =>
+    '<button type="button" data-pref="' + name + '" data-value="' + value + '"' +
+    (String(value) === String(current) ? ' class="on"' : "") + ">" + value + "</button>"
+  ).join("") + "</div>";
+}
+
+function bindShell() {
+  const cta = document.getElementById("cta");
+  if (cta) {
+    cta.addEventListener("click", () => {
+      if (state.checkedIn) go("review");
+      else openThread(false);
+    });
+  }
+  screen.querySelectorAll("[data-word]").forEach((node) => {
+    node.addEventListener("click", () => {
+      state.word = node.getAttribute("data-word");
+      state.view = "word";
+      render();
+    });
+  });
+  screen.querySelectorAll("[data-day]").forEach((node) => {
+    node.addEventListener("click", () => {
+      state.view = "day";
+      render();
+    });
+  });
+  screen.querySelectorAll("[data-pref]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const name = node.getAttribute("data-pref");
+      const value = node.getAttribute("data-value");
+      if (name === "daily") state.daily = Number(value);
+      else if (name === "goal") state.goal = value;
+      else if (name === "tone") state.tone = value;
+      else {
+        state.nextLevel = value === band().name ? "" : value;
+        state.prefNote = value === band().name
+          ? "已经开始的今天不变，从明天生效。"
+          : "已改成「" + value + "」。已经开始的今天不变，从明天生效。";
+        render();
+        return;
+      }
+      state.prefNote = "已经开始的今天不变，从明天生效。";
+      render();
+    });
+  });
+  const add = document.getElementById("add");
+  if (add) add.addEventListener("click", () => { state.adding = true; render(); });
+  const saveWord = document.getElementById("save-word");
+  if (saveWord) {
+    saveWord.addEventListener("click", () => {
+      const en = document.getElementById("add-en").value.trim();
+      const cn = document.getElementById("add-cn").value.trim();
+      const pos = document.getElementById("add-pos").value.trim() || "短语";
+      if (!en || !cn) return;
+      state.custom.push([en, cn, pos]);
+      state.word = "custom:" + (state.custom.length - 1);
+      state.adding = false;
+      state.view = "word";
+      render();
+    });
+  }
+  const retest = document.getElementById("retest");
+  if (retest) {
+    retest.addEventListener("click", () => {
+      retest.textContent = "正在测试";
+      setTimeout(() => { render(); }, 500);
+    });
+  }
+}
+
+function lookupWord(token) {
+  const [kind, indexText] = token.split(":");
+  const index = Number(indexText);
+  if (kind === "today") {
+    const word = band().words[index];
+    return { en: word[0], cn: word[1], pos: "短语", next: state.found.includes(index) ? "今天练过" : "今天" };
+  }
+  if (kind === "custom") {
+    const word = state.custom[index];
+    return { en: word[0], cn: word[1], pos: word[2], next: "从明天开始练" };
+  }
+  const pool = laterWords.filter((word) => !band().words.some((own) => own[0] === word[0]));
+  const word = pool[index];
+  return { en: word[0], cn: word[1], pos: "短语", next: "还没到" };
+}
+
+function renderWord() {
+  const word = lookupWord(state.word);
+  screen.innerHTML = header("words", "词") +
+    '<div class="body"><p class="lead">' + escapeHtml(word.en) + '</p><p class="sub">' + escapeHtml(word.cn) + " · " + escapeHtml(word.pos) + "</p>" +
+    '<div class="phrase"><span>下一次</span><b>' + escapeHtml(word.next) + "</b></div>" +
+    '<p class="hint">参考译文要有翻译密钥才出现。这个原型不发送。</p></div>';
+}
+
+function renderDay() {
+  const item = band();
+  const notes = state.notesSaved
+    ? item.words[0][1] + " → " + item.better + " → 先把今天这句说完整。"
+    : "这天没有留下笔记";
+  screen.innerHTML = header("records", "记录") +
+    '<div class="body"><p class="lead">9月30日</p><p class="sub">' + (state.checkedIn ? "已完成" : "未完成") + "</p>" +
+    '<div class="section">场景</div><p>' + (state.talkDone || state.phase !== "warmup" ? escapeHtml(item.scene) : "这天还没有场景") + "</p>" +
+    '<div class="section">说法</div>' +
+    item.words.map((word) => '<div class="phrase"><span>' + escapeHtml(word[1]) + "</span><b>" + escapeHtml(word[0]) + "</b></div>").join("") +
+    '<div class="section">笔记</div><p>' + escapeHtml(notes) + "</p>" +
+    (state.phase !== "warmup" ? '<button class="primary" id="look" type="button">看当天的对话</button>' : "") +
+    "</div>";
+  const look = document.getElementById("look");
+  if (look) look.addEventListener("click", () => go("review"));
+}
+
+function openThread(readOnly) {
+  const item = band();
+  if (!state.started) {
+    state.started = true;
+    state.phase = "warmup";
+    state.messages = [{
+      role: "coach",
+      text: "今天这五个：\n" + item.words.map((word) => word[1]).join("\n") + "\n用英文回我。一次写一句也行。"
+    }];
+  }
+  state.view = "thread";
+  state.readOnly = readOnly;
+  state.sheet = false;
   render();
 }
 
-function renderChat() {
-  const band = bands[state.band];
-  const step = state.phase === "warmup" ? "热身" : state.phase === "talk" ? "对话" : state.phase === "quiz" ? "考核" : "笔记";
-  screen.innerHTML = header("words", "词") +
-    '<p class="step">' + band.name + " · " + step + "</p>" +
+function stepLabel() {
+  if (state.readOnly && state.checkedIn) return "回看";
+  if (state.phase === "warmup") return "认词";
+  if (state.phase === "talk") return "对话";
+  if (state.phase === "bridge") return "对话";
+  if (state.phase === "quiz") return "考核 " + (state.quizAt + 1) + " / 4";
+  if (state.sheet) return "笔记";
+  return "今天";
+}
+
+function renderThread() {
+  const item = band();
+  const bottom = state.readOnly ? "" : (state.sheet ? sheetHtml() : (state.phase === "bridge" ? bridgeHtml() : composerHtml()));
+  screen.innerHTML = header("close", "关闭") +
+    '<p class="step">' + item.name + " · " + stepLabel() + "</p>" +
     '<div class="body" id="log"><div class="thread">' + state.messages.map(bubble).join("") + "</div></div>" +
-    (state.sheet ? sheetHtml() : composerHtml());
+    bottom;
   const log = document.getElementById("log");
   if (log) log.scrollTop = log.scrollHeight;
   const field = document.getElementById("draft");
@@ -424,66 +752,75 @@ function renderChat() {
     });
     document.getElementById("send").addEventListener("click", send);
   }
+  const grammar = document.getElementById("grammar");
+  if (grammar) grammar.addEventListener("click", showGrammar);
+  const quiz = document.getElementById("to-quiz");
+  if (quiz) quiz.addEventListener("click", startQuiz);
   screen.querySelectorAll("[data-sheet]").forEach((node) => {
-    node.addEventListener("click", () => {
-      const action = node.getAttribute("data-sheet");
-      state.sheet = null;
-      state.messages.push({
-        role: "coach",
-        text: action === "save"
-          ? "记下了。今天这课先到这里，关掉也停在这一句。"
-          : "跳过了。今天仍然算完成，关掉再打开还是这一条对话。"
-      });
-      state.phase = "done";
-      render();
-    });
+    node.addEventListener("click", () => finishNotes(node.getAttribute("data-sheet")));
   });
 }
 
 function composerHtml() {
-  const placeholder = state.phase === "quiz" ? "用英文回答" : "用英文接话";
-  return '<form class="composer" onsubmit="return false"><input id="draft" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + placeholder + '" value="' + escapeAttr(state.draft) + '" /><button id="send" type="button">发送</button></form>';
+  if (state.checkedIn && state.phase === "done") return "";
+  const placeholder = state.phase === "quiz" ? "用英文回答" : "用英文或中文发";
+  return '<form class="composer" onsubmit="return false"><input id="draft" type="text" autocomplete="off" placeholder="' +
+    placeholder + '" value="' + escapeAttr(state.draft) + '" /><button id="send" type="button">发送</button></form>';
+}
+
+function bridgeHtml() {
+  return '<div class="bridge"><button class="alt" id="grammar" type="button">这个语法</button><button id="to-quiz" type="button">开始考核</button></div>';
 }
 
 function bubble(message) {
   const who = message.role === "coach" ? "教练" : "我";
   const klass = message.role === "coach" ? "coach" : "mine";
-  return '<div class="bubble ' + klass + '"><span class="who">' + who + '</span>' + escapeHtml(message.text) + "</div>";
+  return '<div class="bubble ' + klass + '"><span class="who">' + who + "</span>" + escapeHtml(message.text) + "</div>";
 }
 
 function sheetHtml() {
-  return '<div class="sheet"><h2>今天的笔记</h2><p>' + escapeHtml(state.sheet) + '</p><div class="row"><button class="primary" data-sheet="save">保存</button><button class="ghost" data-sheet="skip">跳过</button></div></div>';
+  const item = band();
+  const line = item.words[0][1] + " → " + item.better + " → 先把今天这句说完整。";
+  return '<div class="sheet"><h2>今天的笔记</h2><p>' + escapeHtml(line) + '</p><div class="row"><button class="primary" data-sheet="save" type="button">保存</button><button class="ghost" data-sheet="skip" type="button">跳过</button></div></div>';
 }
 
 function send() {
   const field = document.getElementById("draft");
   const text = field.value.trim();
-  if (!text || state.phase === "done") return;
+  if (!text || state.readOnly || state.sheet) return;
   state.draft = "";
   state.messages.push({ role: "me", text: text });
   if (state.phase === "warmup") replyWarmup(text);
-  else if (state.phase === "talk") replyTalk(text);
+  else if (state.phase === "talk") replyTalk();
   else if (state.phase === "quiz") replyQuiz(text);
   render();
 }
 
 function replyWarmup(text) {
-  const band = bands[state.band];
+  const item = band();
   const said = norm(text);
-  band.words.forEach((word, index) => {
+  item.words.forEach((word, index) => {
     if (state.found.includes(index)) return;
     if (said.includes(norm(word[0]))) state.found.push(index);
   });
-  const missing = band.words.filter((_, index) => !state.found.includes(index));
-  if (missing.length === 0) {
+  const missing = item.words.filter((_, index) => !state.found.includes(index));
+  if (vocabPassed() && missing.length === 0) {
     state.phase = "talk";
     state.messages.push({
       role: "coach",
-      text: "五个都对上了。\n场景是「" + band.scene + "」。我先说一句，你接。\n" + band.lineEn + "\n" + band.lineCn
+      text: "五个都对上了。\n场景是「" + item.scene + "」。我先说一句，你接。\n" + item.lineEn + "\n" + item.lineCn
     });
     return;
   }
-  const hit = band.words.filter((_, index) => state.found.includes(index)).map((word) => word[1]);
+  if (vocabPassed() && missing.length) {
+    state.messages.push({
+      role: "coach",
+      text: "认词过了。还差的「" + missing.map((word) => word[1]).join("、") + "」明天进错词。\n场景是「" + item.scene + "」。我先说一句，你接。\n" + item.lineEn + "\n" + item.lineCn
+    });
+    state.phase = "talk";
+    return;
+  }
+  const hit = item.words.filter((_, index) => state.found.includes(index)).map((word) => word[1]);
   const next = missing[0];
   state.messages.push({
     role: "coach",
@@ -492,39 +829,76 @@ function replyWarmup(text) {
 }
 
 function replyTalk() {
-  const band = bands[state.band];
-  state.phase = "quiz";
+  const item = band();
+  state.talkDone = true;
+  state.phase = "bridge";
   state.messages.push({
     role: "coach",
-    text: "意思到了。改成这一句更顺：\n" + band.better + "\n\n考核只出一道。把「" + band.quizCn + "」说成英文。"
+    text: "意思到了。改成这一句更顺：\n" + item.better
   });
 }
 
-function replyQuiz(text) {
-  const band = bands[state.band];
-  const target = band.words.find((word) => word[1] === band.quizCn);
-  if (norm(text).includes(norm(target[0]))) {
-    state.phase = "notes";
-    state.sheet = band.words[0][1] + " → " + band.better + " → 先把今天这句说完整。";
-    state.messages.push({ role: "coach", text: "对了。今天这一题过了。" });
-  } else {
-    state.messages.push({
-      role: "coach",
-      text: "还没对上。这一题的英文是 " + target[0] + "。再发一次就行。"
-    });
+function showGrammar() {
+  if (!state.grammarSeen) {
+    state.grammarSeen = true;
+    state.messages.push({ role: "coach", text: band().grammar + "\n不点也能开始考核。" });
   }
+  render();
 }
 
-function renderWords() {
-  const band = bands[state.band];
-  screen.innerHTML = header("chat", "回到今天") +
-    '<div class="body"><p class="lead">今天的词</p><p class="sub">主路径仍是那条对话。这里只查词。</p>' +
-    band.words.map((word) => '<div class="word"><b>' + escapeHtml(word[0]) + '</b><span>' + escapeHtml(word[1]) + '</span></div>').join("") +
-    '</div>';
+function startQuiz() {
+  state.phase = "quiz";
+  state.quizAt = 0;
+  state.messages.push({ role: "coach", text: band().quizzes[0].ask });
+  render();
+}
+
+function replyQuiz(text) {
+  const item = band();
+  const quiz = item.quizzes[state.quizAt];
+  const said = norm(text);
+  const ok = quiz.need.every((part) => said.includes(part));
+  if (!ok) {
+    state.messages.push({
+      role: "coach",
+      text: "还没对上。再发一次。要包含：" + quiz.need.join("、")
+    });
+    return;
+  }
+  if (state.quizAt < 3) {
+    state.quizAt += 1;
+    state.messages.push({ role: "coach", text: "对了。\n" + item.quizzes[state.quizAt].ask });
+    return;
+  }
+  state.quizDone = true;
+  state.phase = "done";
+  state.checkedIn = vocabPassed();
+  state.messages.push({
+    role: "coach",
+    text: state.checkedIn
+      ? "四题都过了。今天这课完成。"
+      : "题是过了，认词还没到。今天先不打卡，错的明天再出现。"
+  });
+  if (state.checkedIn && !state.notesDismissed) state.sheet = true;
+}
+
+function finishNotes(action) {
+  state.sheet = false;
+  state.notesDismissed = true;
+  state.notesSaved = action === "save";
+  state.checkedIn = true;
+  state.messages.push({
+    role: "coach",
+    text: action === "save"
+      ? "记下了。今天这课先到这里。"
+      : "跳过了。今天仍然算完成。"
+  });
+  state.phase = "done";
+  render();
 }
 
 function escapeHtml(value) {
-  return value.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char]));
+  return String(value).replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char]));
 }
 function escapeAttr(value) {
   return escapeHtml(value).replace(/"/g, "&quot;");
