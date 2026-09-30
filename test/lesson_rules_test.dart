@@ -10,6 +10,33 @@ void main() {
     expect(seedWords.first.en, 'standup');
   });
 
+
+  test('beginner level picks short phrases, not standup first', () {
+    final store = LessonStore(
+      clock: () => DateTime(2026, 2, 1),
+    )..level = '新手';
+    final plan = store.ensureTodayPlan();
+    expect(plan.newWordIds, ['s24', 's25', 's44', 's45', 's46']);
+    expect(plan.newWordIds.contains('s01'), isFalse);
+
+    store.level = '更长的表达';
+    // frozen today
+    expect(store.ensureTodayPlan().newWordIds, plan.newWordIds);
+
+    final day2 = DateTime(2026, 2, 2);
+    final store2 = LessonStore(clock: () => day2)..level = '更长的表达';
+    // fresh store day 2 with longer level starts at longer band
+    final longer = store2.ensureTodayPlan();
+    expect(longer.newWordIds.first, 's12');
+  });
+
+  test('legacy 日常交流 level restores as 新手', () {
+    final store = LessonStore(clock: () => DateTime(2026, 3, 1));
+    store.restore('{"level":"日常交流","dailyWords":5,"plans":[],"userWords":[],"attempts":{},"errors":{},"reviews":{}}');
+    expect(store.level, '新手');
+    expect(store.ensureTodayPlan().newWordIds.first, 's24');
+  });
+
   test('frozen plan, vocab, reviews, errors, check-in, and notes', () {
     var day = DateTime(2026, 1, 1);
     final store = LessonStore(clock: () => day);

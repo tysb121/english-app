@@ -15,6 +15,31 @@ int vocabPassThreshold(int newWordCount) => (newWordCount * 8 + 9) ~/ 10;
 
 String normalizeAnswer(String value) => value.trim().toLowerCase();
 
+SeedBand bandForLevel(String level) {
+  switch (level) {
+    case '新手':
+    case '日常交流': // legacy label reads as beginner
+      return SeedBand.beginner;
+    case '更长的表达':
+      return SeedBand.longer;
+    case '简单工作对话':
+    default:
+      return SeedBand.workplace;
+  }
+}
+
+String normalizeLevel(String level) {
+  if (level == '日常交流') return '新手';
+  return level;
+}
+
+List<SeedBand> bandsFrom(SeedBand start) {
+  const order = [SeedBand.beginner, SeedBand.workplace, SeedBand.longer];
+  final index = order.indexOf(start);
+  if (index < 0) return order;
+  return order.sublist(index);
+}
+
 String createInstallId() {
   const alphabet =
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-';
@@ -246,10 +271,15 @@ class LessonStore {
     }
 
     takeFrom(true);
-    for (final seed in _seeds) {
+    final bands = bandsFrom(bandForLevel(level));
+    for (final band in bands) {
       if (picked.length >= dailyWords) break;
-      if (used.contains(seed.id) || picked.contains(seed.id)) continue;
-      picked.add(seed.id);
+      for (final seed in _seeds) {
+        if (picked.length >= dailyWords) break;
+        if (seed.band != band) continue;
+        if (used.contains(seed.id) || picked.contains(seed.id)) continue;
+        picked.add(seed.id);
+      }
     }
     final reviews = <String>[];
     for (final entry in _reviews.entries) {
@@ -936,10 +966,12 @@ class LessonStore {
     if (wordCounts.contains(json['dailyWords'])) {
       dailyWords = json['dailyWords'] as int;
     }
-    const levels = {'简单工作对话', '日常交流', '更长的表达'};
+    const levels = {'新手', '简单工作对话', '日常交流', '更长的表达'};
     const goals = {'职场', '日常', '考试', '都要'};
     const tones = {'简洁', '朋友', '老师'};
-    if (levels.contains(json['level'])) level = json['level'] as String;
+    if (levels.contains(json['level'])) {
+      level = normalizeLevel(json['level'] as String);
+    }
     if (goals.contains(json['goal'])) goal = json['goal'] as String;
     if (tones.contains(json['tone'])) tone = json['tone'] as String;
 
