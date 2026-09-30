@@ -51,19 +51,6 @@ List<Map<String, String>> explainMessages(LessonStore store) {
   ];
 }
 
-String gradeRequirement(LessonStore store, int index) {
-  final words = store
-      .scheduledNewWords()
-      .map((id) => store.word(id)?.en ?? id)
-      .join(', ');
-  return switch (index) {
-    0 => words,
-    1 => '意思正确即可，不必和参考译文逐词相同',
-    2 => '接上对方的意思',
-    _ => '至少用上两个今天的新词：$words',
-  };
-}
-
 Map<String, String> _system(LessonStore store) {
   return {'role': 'system', 'content': '$coachSystem 语气：${store.tone}。'};
 }

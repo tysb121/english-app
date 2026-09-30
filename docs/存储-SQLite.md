@@ -49,7 +49,7 @@
 ## 实现顺序与状态
 
 1. ~~加依赖与空库 / schema 版本~~（sqflite + ffi）
-2. ~~灌入 `cefr_core`~~；SQL `pickUntaughtIds` 已提供。`LessonStore.ensureTodayPlan` 经同名内存 `pickUntaughtIds` 抽词（与 SQL API 对齐）；不灌全量内存的纯 SQL 抽词仍可选。
+2. ~~灌入 `cefr_core`~~；SQL `pickUntaughtIds` 已提供。App 启动经 `ensureTodayPlanAsync` 优先 SQL 抽词；同步 `ensureTodayPlan` / 内存孪生作测试与回退。不灌全量词书进内存（按 id 懒加载）仍可选。
 3. ~~迁移 settings + day_plan + progress（attempts / error_log / word_progress）~~
 4. ~~迁移 chat_messages + chat_checkpoints~~
 5. ~~去掉 JSON 写入主路径~~；`LocalProgress` 仅供一次性迁移读取。

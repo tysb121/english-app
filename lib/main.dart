@@ -17,6 +17,17 @@ Future<void> main() async {
   final coachDb = await CoachDatabase.open(seedBook: book.entries);
   final fromDb = await coachDb.loadWordbook();
   final store = LessonStore(book: fromDb.isNotEmpty ? fromDb : book.entries);
+  store.untaughtIdPicker = ({
+    required String level,
+    required int limit,
+    required Set<String> exclude,
+  }) {
+    return coachDb.pickUntaughtIds(
+      level: level,
+      limit: limit,
+      exclude: exclude,
+    );
+  };
   final shell = ProgressShell(store: store, chat: ChatThread());
 
   final hadSqlite = await coachDb.hasProgress();
@@ -29,6 +40,9 @@ Future<void> main() async {
   } else {
     await coachDb.migrateLegacyJsonIfNeeded(shell);
   }
+
+  // Freeze today's plan via SQL untaught pick before first frame.
+  await store.ensureTodayPlanAsync();
 
   Future<void> persist() async {
     try {

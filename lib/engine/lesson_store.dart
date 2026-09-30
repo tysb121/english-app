@@ -4,6 +4,13 @@ import 'dart:math';
 import '../data/cefr_core.dart';
 import 'reasoning_effort.dart';
 
+/// Async untaught picker (SQL). Prefer this over the in-memory CEFR pool when set.
+typedef UntaughtIdPicker = Future<List<String>> Function({
+  required String level,
+  required int limit,
+  required Set<String> exclude,
+});
+
 DateTime dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
 
@@ -195,7 +202,6 @@ class DayPlan {
   final List<String> errorWordIds;
   LessonScene? scene;
   bool dialogueDone;
-  final List<bool?> quiz;
   /// Per new-word sentence grade (presence = done; value = pass).
   final Map<String, bool> sentenceResults = {};
   int vocabCursor;
@@ -219,7 +225,6 @@ class DayPlan {
     required this.reviewWordIds,
     required this.errorWordIds,
   }) : dialogueDone = false,
-       quiz = List<bool?>.filled(4, null),
        vocabCursor = 0,
        notesDismissed = false,
        notes = [];
@@ -231,6 +236,7 @@ class LessonStore {
     List<CefrWord>? book,
     Random? random,
     String? installId,
+    this.untaughtIdPicker,
   }) : _clock = clock ?? DateTime.now,
        _random = random ?? Random(),
        installId = installId ?? createInstallId() {
@@ -248,6 +254,8 @@ class LessonStore {
 
   final DateTime Function() _clock;
   final Random _random;
+  /// Prefer SQL-backed picking when set; [ensureTodayPlan] falls back to RAM.
+  UntaughtIdPicker? untaughtIdPicker;
   final Map<String, Lexeme> _words = {};
   final Map<String, DayPlan> _plans = {};
   final Map<String, List<_Attempt>> _attempts = {};
@@ -271,24 +279,39 @@ class LessonStore {
 
   DateTime get today => dateOnly(_clock());
 
+  /// Sync plan create/get. Uses in-memory [pickUntaughtIds] when freezing.
+  /// Prefer [ensureTodayPlanAsync] in the app so book slots come from SQL.
   DayPlan ensureTodayPlan() {
-    final key = _key(today);
-    final existing = _plans[key];
+    final existing = _plans[_key(today)];
     if (existing != null) return existing;
-    final used = <String>{
-      for (final plan in _plans.values) ...plan.newWordIds,
-    };
-    final picked = <String>[];
+    return _freezeTodayPlan(_pickNewWordIdsSync());
+  }
 
-    // User-added words fill new slots first (still in insertion order).
+  /// Prefer SQL [untaughtIdPicker] for book slots; same freeze / user-first rules.
+  Future<DayPlan> ensureTodayPlanAsync() async {
+    final existing = _plans[_key(today)];
+    if (existing != null) return existing;
+    return _freezeTodayPlan(await _pickNewWordIdsAsync());
+  }
+
+  List<String> _userWordCandidates(Set<String> used) {
+    final picked = <String>[];
     for (final word in _words.values) {
       if (picked.length >= dailyWords) break;
       if (word.source != WordSource.user) continue;
       if (used.contains(word.id) || picked.contains(word.id)) continue;
       picked.add(word.id);
     }
+    return picked;
+  }
 
-    // Remaining slots: pickUntaughtIds (in-memory twin of the SQL picker).
+  Set<String> get _taughtNewWordIds => {
+        for (final plan in _plans.values) ...plan.newWordIds,
+      };
+
+  List<String> _pickNewWordIdsSync() {
+    final used = _taughtNewWordIds;
+    final picked = _userWordCandidates(used);
     if (picked.length < dailyWords) {
       final need = dailyWords - picked.length;
       picked.addAll(
@@ -299,6 +322,33 @@ class LessonStore {
         ),
       );
     }
+    return picked;
+  }
+
+  Future<List<String>> _pickNewWordIdsAsync() async {
+    final used = _taughtNewWordIds;
+    final picked = _userWordCandidates(used);
+    if (picked.length >= dailyWords) return picked;
+    final need = dailyWords - picked.length;
+    final exclude = {...used, ...picked};
+    final code = cefrCodeForLevel(level);
+    final picker = untaughtIdPicker;
+    if (picker != null) {
+      picked.addAll(
+        await picker(level: code, limit: need, exclude: exclude),
+      );
+    } else {
+      picked.addAll(
+        pickUntaughtIds(level: code, limit: need, exclude: exclude),
+      );
+    }
+    return picked;
+  }
+
+  DayPlan _freezeTodayPlan(List<String> picked) {
+    final key = _key(today);
+    final existing = _plans[key];
+    if (existing != null) return existing;
     final reviews = <String>[];
     for (final entry in _reviews.entries) {
       final next = entry.value.nextReview;
@@ -375,7 +425,7 @@ class LessonStore {
   }
 
   /// Random untaught book ids for CEFR [level] (a1|a2|b1), excluding [exclude].
-  /// In-memory twin of the SQL picker; used by [ensureTodayPlan].
+  /// In-memory twin of the SQL picker; sync fallback when no [untaughtIdPicker].
   List<String> pickUntaughtIds({
     required String level,
     required int limit,
@@ -679,15 +729,6 @@ class LessonStore {
     ];
   }
 
-  int get quizPassCount =>
-      ensureTodayPlan().quiz.where((item) => item == true).length;
-
-  bool get quizGate {
-    final quiz = ensureTodayPlan().quiz;
-    if (quiz.any((item) => item == null)) return false;
-    return quiz.where((item) => item == true).length >= 3;
-  }
-
   bool get checkedIn => vocabThresholdMet && sentencesDone && dialogueDone;
 
   void skipNotes() {
@@ -741,12 +782,10 @@ class LessonStore {
 
   String? get referencePreview => ensureTodayPlan().referencePreview;
 
-  /// Reference text is display-only. It never grades a quiz item.
+  /// Reference text is display-only (never part of grading).
   void applyTranslation(String text) {
     ensureTodayPlan().referencePreview = text.trim();
   }
-
-  List<bool?> quizSnapshot() => List<bool?>.from(ensureTodayPlan().quiz);
 
   Map<String, String> reviewSnapshot() {
     return {
@@ -764,7 +803,6 @@ class LessonStore {
     required String task,
     required String content,
     required String? finishReason,
-    int? quizIndex,
     String? sentenceWordId,
   }) {
     if (finishReason != 'stop') return false;
@@ -797,9 +835,6 @@ class LessonStore {
             plan.newWordIds.contains(sentenceWordId) &&
             !plan.sentenceResults.containsKey(sentenceWordId)) {
           plan.sentenceResults[sentenceWordId] = grade.pass;
-        }
-        if (quizIndex != null && quizIndex >= 0 && quizIndex < 4) {
-          plan.quiz[quizIndex] = grade.pass;
         }
         return true;
       case 'explain':
@@ -886,18 +921,6 @@ class LessonStore {
     return drafts.take(5).toList();
   }
 
-  int? get openQuizIndex {
-    final index = ensureTodayPlan().quiz.indexOf(null);
-    return index < 0 ? null : index;
-  }
-
-  void redoFailedQuiz() {
-    final quiz = ensureTodayPlan().quiz;
-    for (var i = 0; i < quiz.length; i++) {
-      if (quiz[i] == false) quiz[i] = null;
-    }
-  }
-
   int get dialogueCursor => ensureTodayPlan().dialogueCursor;
 
   void advanceDialogue() {
@@ -960,23 +983,6 @@ class LessonStore {
     });
   }
 
-  String quizPrompt(int index) {
-    final plan = ensureTodayPlan();
-    final words = plan.newWordIds
-        .map((id) => _words[id]?.en ?? id)
-        .take(2)
-        .join(', ');
-    final scene = plan.scene;
-    return switch (index) {
-      0 => '用今天的一个说法造句。可以试试：$words',
-      1 => '把这句翻译成英文：${scene?.dialogue.first.cn ?? _words[plan.newWordIds.first]?.cn ?? ''}',
-      2 => scene == null
-          ? ''
-          : '用英文接这句：${scene.dialogue.first.en}',
-      _ => '用至少 2 个今天的新词说两句：$words',
-    };
-  }
-
   Map<String, Object?> toJson() {
     return {
       'installId': installId,
@@ -1000,7 +1006,6 @@ class LessonStore {
             'reviewWordIds': plan.reviewWordIds,
             'errorWordIds': plan.errorWordIds,
             'dialogueDone': plan.dialogueDone,
-            'quiz': plan.quiz,
             'sentenceResults': {
               for (final entry in plan.sentenceResults.entries) entry.key: entry.value,
             },
@@ -1187,13 +1192,7 @@ class LessonStore {
         plan.checkedInAt = _parseDay(item['checkedInAt']);
         final preview = item['referencePreview'];
         if (preview is String) plan.referencePreview = preview;
-        final quiz = item['quiz'];
-        if (quiz is List) {
-          for (var i = 0; i < plan.quiz.length && i < quiz.length; i++) {
-            final value = quiz[i];
-            plan.quiz[i] = value is bool ? value : null;
-          }
-        }
+        // Legacy `quiz` payloads are ignored (four-question gate removed).
         final sentences = item['sentenceResults'];
         if (sentences is Map) {
           for (final entry in sentences.entries) {

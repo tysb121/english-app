@@ -137,7 +137,7 @@ class _TodayPageState extends State<TodayPage> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
-                    onPressed: () => _open(context, PracticeKind.errors),
+                    onPressed: () => _openErrors(context),
                     icon: const Icon(Icons.replay_circle_filled_outlined),
                     label: Text('错词 ${plan.errorWordIds.length}（对话后再练）'),
                   ),
@@ -278,9 +278,9 @@ class _TodayPageState extends State<TodayPage> {
     );
   }
 
-  void _open(BuildContext context, PracticeKind kind) {
+  void _openErrors(BuildContext context) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => PracticePage(kind: kind)),
+      MaterialPageRoute<void>(builder: (_) => const PracticePage()),
     );
   }
 }

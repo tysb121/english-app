@@ -184,8 +184,7 @@ CREATE TABLE chat_checkpoints (
   }
 
   /// Random untaught book ids for [level] (a1|a2|b1), excluding [exclude].
-  /// Mirrors LessonStore.pickUntaughtIds; plan creation uses the in-memory twin
-  /// so ensureTodayPlan stays sync (Lexeme lookups stay in RAM).
+  /// Preferred by [LessonStore.ensureTodayPlanAsync] when wired as untaughtIdPicker.
   Future<List<String>> pickUntaughtIds({
     required String level,
     required int limit,

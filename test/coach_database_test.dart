@@ -164,4 +164,45 @@ void main() {
     expect(keys, contains('installId'));
     await coach.close();
   });
+
+  test('ensureTodayPlanAsync prefers SQL picker over empty memory book', () async {
+    final dbPath = p.join(tmp.path, 't5.db');
+    final coach = await CoachDatabase.open(
+      path: dbPath,
+      seedBook: cefrFixture,
+    );
+    // Store has no book in RAM; book slots must come from SQL picker.
+    final store = LessonStore(
+      clock: () => DateTime(2026, 10, 1),
+      book: const [],
+      random: StableRandom(),
+      installId: 'sql_pick',
+    )..level = '入门';
+    var sqlCalls = 0;
+    store.untaughtIdPicker = ({
+      required String level,
+      required int limit,
+      required Set<String> exclude,
+    }) async {
+      sqlCalls += 1;
+      return coach.pickUntaughtIds(
+        level: level,
+        limit: limit,
+        exclude: exclude,
+        random: StableRandom(),
+      );
+    };
+    final plan = await store.ensureTodayPlanAsync();
+    expect(sqlCalls, 1);
+    expect(plan.newWordIds, hasLength(5));
+    for (final id in plan.newWordIds) {
+      expect(id, startsWith('cc_a1_'));
+    }
+    // Frozen: second call does not hit SQL again.
+    final again = await store.ensureTodayPlanAsync();
+    expect(sqlCalls, 1);
+    expect(again.newWordIds, plan.newWordIds);
+    await coach.close();
+  });
+
 }

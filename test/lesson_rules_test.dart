@@ -497,6 +497,37 @@ void main() {
     expect(restoredErrors.nextErrorReview(errorId), DateTime(2026, 2, 5));
     expect(restoredErrors.reviewSnapshot(), errorDates);
   });
+
+  test('restore ignores legacy quiz field in day_plan', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 11, 1));
+    store.restore(
+      '{"level":"入门","dailyWords":5,"plans":[{"date":"2026-11-01","newWordIds":["cc_a1_hello_noun_ce4a5e"],"reviewWordIds":[],"errorWordIds":[],"dialogueDone":false,"quiz":[true,true,true,true],"sentenceResults":{}}],"userWords":[],"attempts":{},"errors":{},"reviews":{}}',
+    );
+    final raw = store.progressJson();
+    expect(raw.contains('"quiz"'), isFalse);
+    expect(store.ensureTodayPlan().newWordIds, ['cc_a1_hello_noun_ce4a5e']);
+    expect(store.checkedIn, isFalse);
+  });
+
+  test('ensureTodayPlanAsync uses untaughtIdPicker when set', () async {
+    final store = fixtureStore(clock: () => DateTime(2026, 11, 2), level: '入门');
+    var calls = 0;
+    store.untaughtIdPicker = ({
+      required String level,
+      required int limit,
+      required Set<String> exclude,
+    }) async {
+      calls += 1;
+      expect(level, 'a1');
+      expect(limit, 5);
+      return store.pickUntaughtIds(level: level, limit: limit, exclude: exclude);
+    };
+    final plan = await store.ensureTodayPlanAsync();
+    expect(calls, 1);
+    expect(plan.newWordIds, hasLength(5));
+    await store.ensureTodayPlanAsync();
+    expect(calls, 1);
+  });
 }
 
 void _reviewError(LessonStore store, String id, {required bool correctly}) {

@@ -160,15 +160,6 @@ class AppModel extends ChangeNotifier {
     });
   }
 
-  Future<String?> gradeQuiz(int index, String answer) {
-    return _grade(
-      prompt: store.quizPrompt(index),
-      requiredWords: gradeRequirement(store, index),
-      answer: answer,
-      quizIndex: index,
-    );
-  }
-
   Future<String?> gradeSentence(String wordId, String answer) {
     final word = store.word(wordId);
     final label = word == null ? wordId : '${word.en} / ${word.cn}';
@@ -246,7 +237,6 @@ class AppModel extends ChangeNotifier {
     required String prompt,
     required String requiredWords,
     required String answer,
-    int? quizIndex,
     String? sentenceWordId,
   }) async {
     store.lastGrade = null;
@@ -258,7 +248,6 @@ class AppModel extends ChangeNotifier {
         requiredWords: requiredWords,
         answer: answer,
       ),
-      quizIndex: quizIndex,
       sentenceWordId: sentenceWordId,
     );
     commit();
@@ -269,10 +258,9 @@ class AppModel extends ChangeNotifier {
   Future<String?> runTask({
     required String task,
     required List<Map<String, String>> messages,
-    int? quizIndex,
     String? sentenceWordId,
   }) async {
-    final first = await _once(task, messages, quizIndex, sentenceWordId);
+    final first = await _once(task, messages, sentenceWordId);
     if (first.accepted) return null;
     if (!first.retry) return first.error;
     final retryMessages = [
@@ -283,7 +271,7 @@ class AppModel extends ChangeNotifier {
             '上一次没有返回合法 JSON。原文如下：\n${_clip(first.raw)}\n请只重发合法 JSON。',
       },
     ];
-    final second = await _once(task, retryMessages, quizIndex, sentenceWordId);
+    final second = await _once(task, retryMessages, sentenceWordId);
     if (second.accepted) return null;
     return second.error ?? '没有返回合法结果';
   }
@@ -291,7 +279,6 @@ class AppModel extends ChangeNotifier {
   Future<_AttemptResult> _once(
     String task,
     List<Map<String, String>> messages,
-    int? quizIndex,
     String? sentenceWordId,
   ) async {
     if (!hasDeepSeekKey) {
@@ -317,7 +304,6 @@ class AppModel extends ChangeNotifier {
           task: task,
           content: reply.content ?? '',
           finishReason: reply.finishReason,
-          quizIndex: quizIndex,
           sentenceWordId: sentenceWordId,
         );
       }
