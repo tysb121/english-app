@@ -1,0 +1,286 @@
+import 'package:flutter/material.dart';
+
+import '../app/app_model.dart';
+import 'english_app.dart';
+import 'theme.dart';
+
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key, this.gate = false});
+
+  final bool gate;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  late final TextEditingController _key = TextEditingController();
+  late final TextEditingController _base = TextEditingController();
+  late final TextEditingController _modelName = TextEditingController();
+  late final TextEditingController _translateKey = TextEditingController();
+  late final TextEditingController _translateBase = TextEditingController();
+  late final TextEditingController _translateModel = TextEditingController();
+  String? _message;
+  bool _busy = false;
+  bool _filled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_filled) return;
+    _filled = true;
+    final model = AppScope.of(context);
+    _key.text = model.deepSeekKey;
+    _base.text = model.deepSeekBase;
+    _modelName.text = model.deepSeekModel;
+    _translateKey.text = model.tokenHubKey;
+    _translateBase.text = model.tokenHubBase;
+    _translateModel.text = model.tokenHubModel;
+  }
+
+  @override
+  void dispose() {
+    _key.dispose();
+    _base.dispose();
+    _modelName.dispose();
+    _translateKey.dispose();
+    _translateBase.dispose();
+    _translateModel.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final model = AppScope.of(context);
+    final store = model.store;
+    final showStart = widget.gate && model.connectionOk && model.hasDeepSeekKey;
+    return Scaffold(
+      appBar: AppBar(title: const Text('今日英语')),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+        children: [
+          const Text('DeepSeek 密钥', style: TextStyle(color: ink)),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _key,
+            obscureText: true,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: const InputDecoration(hintText: '粘贴密钥'),
+          ),
+          ExpansionTile(
+            title: const Text('高级'),
+            children: [
+              TextField(
+                controller: _base,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(hintText: 'https://api.deepseek.com'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _modelName,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(hintText: 'deepseek-flash'),
+              ),
+            ],
+          ),
+          if (showStart)
+            FilledButton(onPressed: model.unlock, child: const Text('开始今天'))
+          else
+            FilledButton(
+              onPressed: _busy ? null : () => _test(model),
+              child: Text(_busy ? '正在测试' : '测试连接'),
+            ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                _message!,
+                style: TextStyle(color: _statusColor(_message!), fontSize: 16),
+              ),
+            ),
+          if (!showStart)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: _busy ? null : () => _saveDeepSeek(model),
+                child: const Text('保存'),
+              ),
+            ),
+          const SizedBox(height: 12),
+          ExpansionTile(
+            title: const Text('参考翻译密钥'),
+            children: [
+              TextField(
+                controller: _translateKey,
+                obscureText: true,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: const InputDecoration(hintText: '不填也能开始'),
+              ),
+              ExpansionTile(
+                title: const Text('高级'),
+                children: [
+                  TextField(
+                    controller: _translateBase,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(
+                      hintText: 'https://tokenhub.tencentmaas.com/v1',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _translateModel,
+                    autocorrect: false,
+                    enableSuggestions: false,
+                    decoration: const InputDecoration(hintText: 'hy-mt2-plus'),
+                  ),
+                ],
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _saveTokenHub(model),
+                  child: const Text('保存'),
+                ),
+              ),
+            ],
+          ),
+          if (!widget.gate) ...[
+            const SizedBox(height: 16),
+            const Text('每天新词'),
+            const SizedBox(height: 8),
+            _choices<int>(
+              values: const [5, 10, 15, 20],
+              label: (value) => '$value',
+              selected: store.dailyWords,
+              onPick: (value) {
+                store.dailyWords = value;
+                model.commit();
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('水平'),
+            const SizedBox(height: 8),
+            _choices<String>(
+              values: const ['简单工作对话', '日常交流', '更长的表达'],
+              label: (value) => value,
+              selected: store.level,
+              onPick: (value) {
+                store.level = value;
+                model.commit();
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('目标'),
+            const SizedBox(height: 8),
+            _choices<String>(
+              values: const ['职场', '日常', '考试', '都要'],
+              label: (value) => value,
+              selected: store.goal,
+              onPick: (value) {
+                store.goal = value;
+                model.commit();
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('语气'),
+            const SizedBox(height: 8),
+            _choices<String>(
+              values: const ['简洁', '朋友', '老师'],
+              label: (value) => value,
+              selected: store.tone,
+              onPick: (value) {
+                store.tone = value;
+                model.commit();
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              '今天已经生成的计划不动。这些改动从下一天的计划生效。',
+              style: TextStyle(color: ink, fontSize: 13),
+            ),
+          ],
+          const SizedBox(height: 28),
+          const Text(
+            '学习记录只在这台手机上，卸载即删除。',
+            style: TextStyle(color: ink, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _choices<T>({
+    required List<T> values,
+    required String Function(T value) label,
+    required T selected,
+    required void Function(T value) onPick,
+  }) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final value in values)
+          ChoiceChip(
+            label: Text(label(value)),
+            selected: value == selected,
+            onSelected: (_) => onPick(value),
+          ),
+      ],
+    );
+  }
+
+  void _saveDeepSeek(AppModel model) {
+    final error = model.updateDeepSeek(
+      key: _key.text,
+      base: _base.text,
+      modelName: _modelName.text,
+    );
+    setState(() => _message = error);
+  }
+
+  void _saveTokenHub(AppModel model) {
+    final error = model.updateTokenHub(
+      key: _translateKey.text,
+      base: _translateBase.text,
+      modelName: _translateModel.text,
+    );
+    setState(() => _message = error);
+  }
+
+  Future<void> _test(AppModel model) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    final error = model.updateDeepSeek(
+      key: _key.text,
+      base: _base.text,
+      modelName: _modelName.text,
+    );
+    if (!mounted) return;
+    if (error != null) {
+      setState(() {
+        _busy = false;
+        _message = error;
+      });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _message = '正在测试';
+    });
+    final message = await model.testConnection();
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      _message = message;
+    });
+  }
+}
+
+Color _statusColor(String message) {
+  if (message == '已连通' || message == '正在测试') return pine;
+  return wrongRed;
+}

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>今日英语 · 交互原型</title>
+<style>
+  :root {
+    --paper: #f6f4ef;
+    --ink: #1b1b1b;
+    --pine: #0e6b45;
+    --pine-soft: #e5f2eb;
+    --red: #8e2f2f;
+    --line: #e3ddd2;
+    --white: #fffcf7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: #e6e1d6;
+    color: var(--ink);
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .stage { padding: 28px 16px 40px; }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: #111;
+    border-radius: 36px;
+    padding: 12px;
+    box-shadow: 0 24px 60px rgba(40, 32, 20, 0.28);
+  }
+  .screen {
+    height: 100%;
+    background: var(--paper);
+    border-radius: 26px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .status {
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 18px;
+    font-size: 12px;
+    color: #5c584f;
+  }
+  header.app {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 18px 10px;
+  }
+  header.app h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 650;
+    letter-spacing: 0;
+  }
+  header.app button, .textish {
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    font: inherit;
+    font-size: 15px;
+    padding: 6px 0;
+    cursor: pointer;
+  }
+  .body {
+    flex: 1;
+    overflow: auto;
+    padding: 4px 18px 18px;
+  }
+  .lead {
+    font-size: 28px;
+    line-height: 1.35;
+    margin: 12px 0 8px;
+    font-weight: 650;
+  }
+  .sub {
+    margin: 0 0 18px;
+    color: #4e4a43;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  .choice {
+    width: 100%;
+    text-align: left;
+    border: 1px solid var(--line);
+    background: var(--white);
+    border-radius: 16px;
+    padding: 16px 16px 14px;
+    margin-bottom: 10px;
+    cursor: pointer;
+    color: var(--ink);
+    font: inherit;
+  }
+  .choice strong { display: block; font-size: 18px; margin-bottom: 4px; }
+  .choice span { color: #4e4a43; font-size: 15px; line-height: 1.45; }
+  .choice em { font-style: normal; color: var(--pine); }
+  label.field {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    border: 1px solid #d9d2c6;
+    background: white;
+    border-radius: 12px;
+    padding: 14px 12px;
+    font: inherit;
+    font-size: 16px;
+    color: var(--ink);
+  }
+  .primary, .ghost {
+    width: 100%;
+    border-radius: 14px;
+    min-height: 52px;
+    font: inherit;
+    font-size: 17px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .primary {
+    border: 0;
+    background: var(--pine);
+    color: white;
+    margin-top: 14px;
+  }
+  .primary:disabled { background: #9db8ab; cursor: default; }
+  .ghost {
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    margin-top: 4px;
+  }
+  .note {
+    margin-top: 12px;
+    font-size: 16px;
+    line-height: 1.45;
+  }
+  .note.ok { color: var(--pine); }
+  .note.bad { color: var(--red); }
+  .thread { display: flex; flex-direction: column; gap: 12px; padding-bottom: 8px; }
+  .bubble {
+    max-width: 92%;
+    padding: 12px 14px;
+    border-radius: 16px;
+    font-size: 16px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
+  .coach {
+    align-self: flex-start;
+    background: white;
+    border: 1px solid var(--line);
+  }
+  .coach .who, .mine .who {
+    display: block;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+    color: #6d685f;
+  }
+  .mine {
+    align-self: flex-end;
+    background: var(--pine-soft);
+  }
+  .fix { color: var(--red); }
+  .ok { color: var(--pine); }
+  .composer {
+    border-top: 1px solid var(--line);
+    padding: 10px 12px 16px;
+    display: flex;
+    gap: 8px;
+    background: var(--paper);
+  }
+  .composer input {
+    flex: 1;
+    border-radius: 22px;
+    padding: 12px 14px;
+  }
+  .composer button {
+    border: 0;
+    background: var(--pine);
+    color: white;
+    border-radius: 22px;
+    padding: 0 16px;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .sheet {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    background: white;
+    border-radius: 22px 22px 26px 26px;
+    padding: 16px 18px 22px;
+    box-shadow: 0 -12px 40px rgba(40, 32, 20, 0.12);
+  }
+  .sheet h2 { margin: 0 0 8px; font-size: 18px; }
+  .sheet p { margin: 0 0 8px; line-height: 1.5; font-size: 15px; }
+  .row { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .word {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .word b { font-size: 17px; font-weight: 650; }
+  .word span { display: block; color: #4e4a43; margin-top: 2px; }
+  .step {
+    font-size: 13px;
+    color: #6d685f;
+    margin: 0 18px 6px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="phone">
+    <div class="screen" id="screen"></div>
+  </div>
+</div>
+<script>
+const bands = {
+  beginner: {
+    name: "新手",
+    blurb: "从今天能说出口的短句开始。",
+    example: "I'm running late.",
+    words: [
+      ["I'm running late.", "要迟到了"],
+      ["sounds good", "可以"],
+      ["let me check", "我确认一下"],
+      ["I'll get back to you", "我稍后回复你"],
+      ["keep me posted", "有进展告诉我"]
+    ],
+    scene: "你要晚到一会儿",
+    lineEn: "Can we start without you?",
+    lineCn: "我们可以先开始吗？",
+    better: "I'll be running late, but you can start.",
+    quizCn: "我确认一下"
+  },
+  work: {
+    name: "简单工作对话",
+    blurb: "从开会里常说的那几句开始。",
+    example: "Let's sync up.",
+    words: [
+      ["standup", "站会"],
+      ["deadline", "截止日期"],
+      ["follow up", "跟进"],
+      ["blocker", "阻碍"],
+      ["sync up", "对一下进度"]
+    ],
+    scene: "上午的站会",
+    lineEn: "Any blocker before the standup?",
+    lineCn: "站会前有阻碍吗？",
+    better: "No blocker. I'll follow up after the standup.",
+    quizCn: "跟进"
+  },
+  long: {
+    name: "更长的表达",
+    blurb: "词可以难一点，让你连着说两句。",
+    example: "Can we take this offline?",
+    words: [
+      ["take this offline", "会下再说"],
+      ["stakeholder", "相关方"],
+      ["tradeoff", "取舍"],
+      ["out of scope", "不在范围内"],
+      ["alignment", "达成一致"]
+    ],
+    scene: "范围没对齐",
+    lineEn: "This looks out of scope.",
+    lineCn: "这看起来不在范围内。",
+    better: "This is out of scope. Let's take this offline and check with the stakeholder.",
+    quizCn: "会下再说"
+  }
+};
+
+const state = {
+  view: "level",
+  band: null,
+  key: "",
+  busy: false,
+  connected: false,
+  message: "",
+  phase: "warmup",
+  found: [],
+  messages: [],
+  draft: "",
+  sheet: null
+};
+
+const screen = document.getElementById("screen");
+
+function norm(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function statusBar() {
+  return '<div class="status"><span>9:41</span><span>今日英语</span></div>';
+}
+
+function header(action, label) {
+  const side = label
+    ? '<button type="button" data-go="' + action + '">' + label + '</button>'
+    : "<span></span>";
+  return statusBar() + '<header class="app"><h1>今日英语</h1>' + side + "</header>";
+}
+
+function render() {
+  if (state.view === "level") renderLevel();
+  else if (state.view === "key") renderKey();
+  else if (state.view === "words") renderWords();
+  else renderChat();
+  screen.querySelectorAll("[data-go]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const go = node.getAttribute("data-go");
+      if (go === "level") {
+        state.view = "level";
+      } else if (go === "reset") {
+        state.view = "level";
+        state.band = null;
+        state.connected = false;
+        state.message = "";
+        state.messages = [];
+        state.found = [];
+        state.phase = "warmup";
+        state.sheet = null;
+        state.draft = "";
+      } else if (go === "chat" || go === "words") {
+        state.view = go;
+        state.sheet = null;
+      }
+      render();
+    });
+  });
+}
+
+function renderLevel() {
+  screen.innerHTML = header("reset", "") +
+    '<div class="body"><p class="lead">你现在说到哪一步？</p><p class="sub">选一次就记住。今天的词从这一档里取，以后可以在设置里改，从下一天生效。</p>' +
+    Object.entries(bands).map(([id, band]) =>
+      '<button class="choice" data-band="' + id + '"><strong>' + band.name + '</strong><span>' + band.blurb + '<br><em>' + band.example + '</em></span></button>'
+    ).join("") +
+    '</div>';
+  screen.querySelectorAll("[data-band]").forEach((node) => {
+    node.addEventListener("click", () => {
+      state.band = node.getAttribute("data-band");
+      state.view = "key";
+      state.message = "";
+      render();
+    });
+  });
+}
+
+function renderKey() {
+  const band = bands[state.band];
+  screen.innerHTML = header("level", "上一步") +
+    '<div class="body"><p class="lead">填 DeepSeek 密钥</p><p class="sub">已选「' + band.name + '」。密钥只留在这台手机上。连上之后才开始今天的课。</p>' +
+    '<label class="field">DeepSeek 密钥</label><input id="key" type="password" placeholder="粘贴密钥" value="' + escapeAttr(state.key) + '" />' +
+    '<button class="primary" id="test" ' + (state.busy ? "disabled" : "") + '>' + (state.connected ? "开始今天" : (state.busy ? "正在测试" : "测试连接")) + '</button>' +
+    (state.message ? '<p class="note ' + (state.connected ? "ok" : "bad") + '">' + state.message + '</p>' : "") +
+    '<p class="sub" style="margin-top:22px">这是原型。测试不会真的访问网络。</p></div>';
+  const input = document.getElementById("key");
+  input.addEventListener("input", () => { state.key = input.value; });
+  document.getElementById("test").addEventListener("click", () => {
+    if (state.connected) {
+      startLesson();
+      return;
+    }
+    state.key = input.value;
+    if (!state.key.trim()) {
+      state.message = "密钥无效";
+      state.connected = false;
+      render();
+      return;
+    }
+    state.busy = true;
+    state.message = "正在测试";
+    state.connected = false;
+    render();
+    setTimeout(() => {
+      state.busy = false;
+      state.connected = true;
+      state.message = "已连通";
+      render();
+    }, 700);
+  });
+}
+
+function startLesson() {
+  const band = bands[state.band];
+  state.view = "chat";
+  state.phase = "warmup";
+  state.found = [];
+  state.sheet = null;
+  state.messages = [{
+    role: "coach",
+    text: "今天先说「" + band.scene + "」。\n这五个：\n" + band.words.map((word) => word[1]).join("\n") + "\n用英文回我。一次写一句也行。"
+  }];
+  render();
+}
+
+function renderChat() {
+  const band = bands[state.band];
+  const step = state.phase === "warmup" ? "热身" : state.phase === "talk" ? "对话" : state.phase === "quiz" ? "考核" : "笔记";
+  screen.innerHTML = header("words", "词") +
+    '<p class="step">' + band.name + " · " + step + "</p>" +
+    '<div class="body" id="log"><div class="thread">' + state.messages.map(bubble).join("") + "</div></div>" +
+    (state.sheet ? sheetHtml() : composerHtml());
+  const log = document.getElementById("log");
+  if (log) log.scrollTop = log.scrollHeight;
+  const field = document.getElementById("draft");
+  if (field) {
+    field.focus();
+    field.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") send();
+    });
+    document.getElementById("send").addEventListener("click", send);
+  }
+  screen.querySelectorAll("[data-sheet]").forEach((node) => {
+    node.addEventListener("click", () => {
+      const action = node.getAttribute("data-sheet");
+      state.sheet = null;
+      state.messages.push({
+        role: "coach",
+        text: action === "save"
+          ? "记下了。今天这课先到这里，关掉也停在这一句。"
+          : "跳过了。今天仍然算完成，关掉再打开还是这一条对话。"
+      });
+      state.phase = "done";
+      render();
+    });
+  });
+}
+
+function composerHtml() {
+  const placeholder = state.phase === "quiz" ? "用英文回答" : "用英文接话";
+  return '<form class="composer" onsubmit="return false"><input id="draft" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + placeholder + '" value="' + escapeAttr(state.draft) + '" /><button id="send" type="button">发送</button></form>';
+}
+
+function bubble(message) {
+  const who = message.role === "coach" ? "教练" : "我";
+  const klass = message.role === "coach" ? "coach" : "mine";
+  return '<div class="bubble ' + klass + '"><span class="who">' + who + '</span>' + escapeHtml(message.text) + "</div>";
+}
+
+function sheetHtml() {
+  return '<div class="sheet"><h2>今天的笔记</h2><p>' + escapeHtml(state.sheet) + '</p><div class="row"><button class="primary" data-sheet="save">保存</button><button class="ghost" data-sheet="skip">跳过</button></div></div>';
+}
+
+function send() {
+  const field = document.getElementById("draft");
+  const text = field.value.trim();
+  if (!text || state.phase === "done") return;
+  state.draft = "";
+  state.messages.push({ role: "me", text: text });
+  if (state.phase === "warmup") replyWarmup(text);
+  else if (state.phase === "talk") replyTalk(text);
+  else if (state.phase === "quiz") replyQuiz(text);
+  render();
+}
+
+function replyWarmup(text) {
+  const band = bands[state.band];
+  const said = norm(text);
+  band.words.forEach((word, index) => {
+    if (state.found.includes(index)) return;
+    if (said.includes(norm(word[0]))) state.found.push(index);
+  });
+  const missing = band.words.filter((_, index) => !state.found.includes(index));
+  if (missing.length === 0) {
+    state.phase = "talk";
+    state.messages.push({
+      role: "coach",
+      text: "五个都对上了。\n场景是「" + band.scene + "」。我先说一句，你接。\n" + band.lineEn + "\n" + band.lineCn
+    });
+    return;
+  }
+  const hit = band.words.filter((_, index) => state.found.includes(index)).map((word) => word[1]);
+  const next = missing[0];
+  state.messages.push({
+    role: "coach",
+    text: (hit.length ? "对上了：" + hit.join("、") + "。\n" : "这句还没对上。\n") + "还差「" + next[1] + "」。可以写成 " + next[0]
+  });
+}
+
+function replyTalk() {
+  const band = bands[state.band];
+  state.phase = "quiz";
+  state.messages.push({
+    role: "coach",
+    text: "意思到了。改成这一句更顺：\n" + band.better + "\n\n考核只出一道。把「" + band.quizCn + "」说成英文。"
+  });
+}
+
+function replyQuiz(text) {
+  const band = bands[state.band];
+  const target = band.words.find((word) => word[1] === band.quizCn);
+  if (norm(text).includes(norm(target[0]))) {
+    state.phase = "notes";
+    state.sheet = band.words[0][1] + " → " + band.better + " → 先把今天这句说完整。";
+    state.messages.push({ role: "coach", text: "对了。今天这一题过了。" });
+  } else {
+    state.messages.push({
+      role: "coach",
+      text: "还没对上。这一题的英文是 " + target[0] + "。再发一次就行。"
+    });
+  }
+}
+
+function renderWords() {
+  const band = bands[state.band];
+  screen.innerHTML = header("chat", "回到今天") +
+    '<div class="body"><p class="lead">今天的词</p><p class="sub">主路径仍是那条对话。这里只查词。</p>' +
+    band.words.map((word) => '<div class="word"><b>' + escapeHtml(word[0]) + '</b><span>' + escapeHtml(word[1]) + '</span></div>').join("") +
+    '</div>';
+}
+
+function escapeHtml(value) {
+  return value.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[char]));
+}
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/"/g, "&quot;");
+}
+
+render();
+</script>
+</body>
+</html>
