@@ -118,10 +118,24 @@ ApiCall tokenHubTranslation({
 const coachSystemPrompt =
     '你是「今日英语」应用里的英语教练，只做一件事：帮用户练英语。\n'
     '身份边界：你不是通用助手、不是编程/写作/百科/生活顾问。与练英语无关的请求，用一两句中文礼貌拒绝，'
-    '并立刻把话题带回今天的词、造句或短对话。\n'
+    '并立刻把话题带回今天的词与英文练习。\n'
     '教学方式：用简短中文带练，一次只推进一小步；用户要练的句子用英文。'
-    '可以纠正语法和用法，给一句改写和一句原因。\n'
-    '不要宣布打卡，不要安排复习日期，不要声称进度已经记下，不要调用工具，不要输出 JSON。';
+    '可以纠正语法和用法，给一句改写和一句原因（软纠错写在回复里）。\n'
+    '不要宣布打卡或「今天练完了」，不要安排复习日期，不要声称进度已经记下，'
+    '不要发明或改动今天的词表与日期，不要调用工具，不要输出 JSON。';
+
+/// Practice-thread system prompt: frozen today's words from local ledger only.
+String coachPracticeSystemPrompt({
+  required List<String> todayWordLines,
+  String tone = '简洁',
+}) {
+  final words =
+      todayWordLines.isEmpty ? '（暂无）' : todayWordLines.join('、');
+  return '$coachSystemPrompt\n'
+      '今天本地冻住的词（不可增删改）：$words。\n'
+      '请引导用户在对话里自然用上这些词；可给弱开口或半句提示。'
+      '软纠错写在气泡里。语气：$tone。';
+}
 
 const checkpointSystemPrompt =
     '你在为「今日英语」英语教练整理更早的对话。只整理与练英语有关的事实。'

@@ -31,6 +31,9 @@ DateTime addDays(DateTime value, int days) {
 /// Legacy 80% pass helper; daily 认词 no longer uses an accuracy threshold.
 int vocabPassThreshold(int newWordCount) => (newWordCount * 8 + 9) ~/ 10;
 
+/// Short coach-chat round cap for the daily loop (user↔coach turns).
+const int targetPracticeRounds = 6;
+
 String normalizeAnswer(String value) => value.trim().toLowerCase();
 
 const productLevels = ['入门', '基础', '进阶'];
@@ -632,6 +635,37 @@ class LessonStore {
     );
   }
 
+  /// Mark a specific today's word as seen（懂了）without walking the vocab cursor.
+  /// Same ledger effects as [acknowledgeVocab] for that word.
+  VocabFeedback? acknowledgeWord(String wordId) {
+    final plan = ensureTodayPlan();
+    final lexeme = _words[wordId];
+    if (lexeme == null) return null;
+    final isToday = plan.newWordIds.contains(wordId) ||
+        plan.reviewWordIds.contains(wordId);
+    if (!isToday) return null;
+    if (vocabSeen(wordId)) {
+      return VocabFeedback(
+        wordId: wordId,
+        correct: true,
+        correctEn: lexeme.en,
+      );
+    }
+    _attempts.putIfAbsent(_key(plan.date), () => []).add(
+      _Attempt(wordId, lexeme.en, true),
+    );
+    if (_isActiveError(wordId)) {
+      _advanceError(wordId, today);
+    } else {
+      _advanceSuccess(wordId, today);
+    }
+    return VocabFeedback(
+      wordId: wordId,
+      correct: true,
+      correctEn: lexeme.en,
+    );
+  }
+
   /// Legacy typed 中→英 compare. Kept for leftover error-queue tests / optional
   /// review paths; daily 认词 uses [acknowledgeVocab] instead.
   VocabFeedback? submitVocab(String answer) {
@@ -837,6 +871,85 @@ class LessonStore {
   }
 
   int get sentenceDoneCount => ensureTodayPlan().sentenceResults.length;
+
+  /// Whether a today's new word has been used in chat / chip insert.
+  bool wordUsed(String wordId) =>
+      ensureTodayPlan().sentenceResults.containsKey(wordId);
+
+  /// Mark 「用过」for a today's new word (idempotent).
+  void markWordUsed(String wordId, {bool pass = true}) {
+    final plan = ensureTodayPlan();
+    if (!plan.newWordIds.contains(wordId)) return;
+    if (plan.sentenceResults.containsKey(wordId)) return;
+    plan.sentenceResults[wordId] = pass;
+  }
+
+  /// Scan user text for today's English lemmas; mark hits as used.
+  /// Returns the word ids newly or already marked from this text.
+  List<String> markWordsUsedInText(String text) {
+    final plan = ensureTodayPlan();
+    final haystack = text.toLowerCase();
+    final hit = <String>[];
+    for (final id in plan.newWordIds) {
+      final en = _words[id]?.en;
+      if (en == null || en.trim().isEmpty) continue;
+      if (_textContainsLemma(haystack, en.toLowerCase())) {
+        markWordUsed(id);
+        hit.add(id);
+      }
+    }
+    return hit;
+  }
+
+  bool _textContainsLemma(String haystack, String lemma) {
+    final needle = lemma.trim().toLowerCase();
+    if (needle.isEmpty) return false;
+    if (needle.contains(' ')) return haystack.contains(needle);
+    final pattern = RegExp(
+      '(^|[^A-Za-z])' + RegExp.escape(needle) + '([^A-Za-z]|\$)',
+      caseSensitive: false,
+    );
+    return pattern.hasMatch(haystack);
+  }
+
+  /// Completed user↔coach practice rounds (reuses dialogueCursor).
+  int get practiceRounds => ensureTodayPlan().dialogueCursor;
+
+  int get remainingPracticeRounds {
+    final left = targetPracticeRounds - practiceRounds;
+    return left < 0 ? 0 : left;
+  }
+
+  /// Record one practice round after a user turn in the coach chat.
+  void recordPracticeRound() {
+    final plan = ensureTodayPlan();
+    if (plan.dialogueDone) return;
+    if (plan.dialogueCursor < targetPracticeRounds) {
+      plan.dialogueCursor += 1;
+    }
+    if (plan.dialogueCursor >= targetPracticeRounds) {
+      plan.dialogueDone = true;
+    }
+  }
+
+  /// Words still missing 懂了 or 用过.
+  int get remainingWordTasks {
+    final plan = ensureTodayPlan();
+    var n = 0;
+    for (final id in plan.newWordIds) {
+      if (!vocabSeen(id) || !plan.sentenceResults.containsKey(id)) n += 1;
+    }
+    return n;
+  }
+
+  /// Progress remainder for the chat top bar.
+  String progressRemainderLine() {
+    if (checkedIn) return '今天练完了';
+    final words = remainingWordTasks;
+    final rounds = remainingPracticeRounds;
+    if (words == 0 && rounds == 0) return '今天练完了';
+    return '还差：词$words / 轮次$rounds';
+  }
 
   String sentencePrompt(String wordId) {
     final word = _words[wordId];
@@ -1089,16 +1202,19 @@ class LessonStore {
   String homeActionLabel() {
     final plan = ensureTodayPlan();
     if (checkedIn) return '回看今天';
-    if (!vocabDone) {
-      final attempts = _attempts[_key(plan.date)] ?? [];
-      if (attempts.isEmpty) return '开始今天';
-      return '继续认词';
+    final attempts = _attempts[_key(plan.date)] ?? [];
+    final started = attempts.isNotEmpty ||
+        plan.sentenceResults.isNotEmpty ||
+        plan.dialogueCursor > 0 ||
+        (plan.scene != null);
+    if (!started) return '开始今天';
+    if (plan.errorWordIds.isNotEmpty &&
+        vocabDone &&
+        sentencesDone &&
+        plan.dialogueDone) {
+      return '还有错词';
     }
-    if (!sentencesDone) return '继续造句';
-    if (sceneInFlight && plan.scene == null) return '正在写今天的场景';
-    if (!plan.dialogueDone) return '继续对话';
-    if (plan.errorWordIds.isNotEmpty) return '还有错词';
-    return '回看今天';
+    return '继续练';
   }
 
   List<StudyNote> noteDrafts() {

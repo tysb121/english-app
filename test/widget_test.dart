@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:english_app/app/app_model.dart';
 import 'package:english_app/engine/api_requests.dart';
+import 'package:english_app/engine/chat_thread.dart';
+import 'package:english_app/engine/lesson_store.dart';
 import 'package:english_app/net/poster.dart';
 import 'package:english_app/ui/english_app.dart';
 import 'package:flutter/material.dart';
@@ -100,7 +102,7 @@ void main() {
     store.submitVocab('nope');
     model.commit();
     await tester.pump();
-    expect(find.text('继续认词'), findsOneWidget);
+    expect(find.text('继续练'), findsOneWidget);
   });
 
   testWidgets('home labels follow the real store', (tester) async {
@@ -112,52 +114,32 @@ void main() {
       unlocked: true,
     );
     store.ensureTodayPlan();
-    final n = store.requiredTodayPlan.newWordIds.length;
-    for (var i = 0; i < n; i++) {
-      store.acknowledgeVocab();
-      store.advanceVocab();
+    for (final id in store.requiredTodayPlan.newWordIds) {
+      store.acknowledgeWord(id);
     }
     await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('继续造句'), findsOneWidget);
+    expect(find.text('继续练'), findsOneWidget);
+    expect(find.text('懂了'), findsWidgets);
+    expect(find.text('用过'), findsOneWidget);
+    expect(find.text('轮次'), findsOneWidget);
 
     for (final id in store.scheduledNewWords()) {
-      store.applyModelResponse(
-        task: 'grade_open',
-        content: _passGrade,
-        finishReason: 'stop',
-        sentenceWordId: id,
-      );
+      store.markWordUsed(id);
     }
     model.commit();
     await tester.pump();
-    expect(find.text('继续对话'), findsOneWidget);
+    expect(find.text('继续练'), findsOneWidget);
 
-    store.sceneInFlight = true;
-    model.commit();
-    await tester.pump();
-    expect(find.text('正在写今天的场景'), findsOneWidget);
-
-    store.sceneInFlight = false;
-    expect(
-      store.applyModelResponse(
-        task: 'fill_scene',
-        content: _scene,
-        finishReason: 'stop',
-      ),
-      isTrue,
-    );
-    model.commit();
-    await tester.pump();
-    expect(find.text('继续对话'), findsOneWidget);
-
-    store.markDialogueDone();
+    for (var i = 0; i < targetPracticeRounds; i++) {
+      store.recordPracticeRound();
+    }
     model.commit();
     await tester.pump();
     expect(find.text('回看今天'), findsOneWidget);
     expect(store.checkedIn, isTrue);
   });
 
-  testWidgets('认词 shows gloss and advances with 认识了 offline', (tester) async {
+  testWidgets('coach chat shows word cards and 懂了 offline', (tester) async {
     final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
     final poster = RecordingPoster();
     final model = AppModel(
@@ -169,12 +151,11 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    expect(find.text('hello'), findsOneWidget);
-    expect(find.text('喂；嘿'), findsOneWidget);
-    expect(find.text('名词'), findsOneWidget);
-    expect(find.text('认识了'), findsOneWidget);
-    expect(find.text('提交认词'), findsNothing);
-    await tester.tap(find.text('认识了'));
+    expect(find.text('跟教练练'), findsOneWidget);
+    expect(find.textContaining('还差'), findsWidgets);
+    expect(find.text('hello'), findsWidgets);
+    expect(find.text('懂了'), findsWidgets);
+    await tester.tap(find.text('懂了').first);
     await tester.pumpAndSettle();
     expect(poster.calls, isEmpty);
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
@@ -182,46 +163,45 @@ void main() {
     expect(store.progressJson().contains('apiKey'), isFalse);
   });
 
-  testWidgets('sentence corrections use the real grade parser', (tester) async {
+  testWidgets('coach chat marks 用过 from typed today word', (tester) async {
     final store = fixtureStore(
       clock: () => DateTime(2026, 9, 1),
       levelChosen: true,
     );
     store.ensureTodayPlan();
-    final n = store.requiredTodayPlan.newWordIds.length;
-    for (var i = 0; i < n; i++) {
-      store.acknowledgeVocab();
-      store.advanceVocab();
+    for (final id in store.requiredTodayPlan.newWordIds) {
+      store.acknowledgeWord(id);
     }
     final poster = RecordingPoster();
-    poster.responses.add(Posted(200, _wrap(_failGrade)));
-    final model = AppModel(
+    poster.responses.add(
+      const Posted(
+        200,
+        'data: {"choices":[{"delta":{"content":"Nice — try again."},"finish_reason":"stop"}]}\n\n'
+        'data: {"choices":[],"usage":{"total_tokens":3}}\n\n'
+        'data: [DONE]\n',
+      ),
+    );
+    final chatModel = AppModel(
       store: store,
       poster: poster,
+      chat: ChatThread(idFactory: () => 't1'),
       deepSeekKey: 'test-key',
       unlocked: true,
     );
-    await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('继续造句'), findsOneWidget);
-    await tester.tap(find.text('继续造句'));
+    await tester.pumpWidget(EnglishApp(model: chatModel));
+    expect(find.text('继续练'), findsOneWidget);
+    await tester.tap(find.text('继续练'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('造句'), findsWidgets);
     expect(find.text('发送'), findsOneWidget);
-    final wordId = store.currentSentenceWordId!;
-    await tester.enterText(find.byType(TextField).last, 'He go');
+    final wordId = store.scheduledNewWords().first;
+    final en = store.word(wordId)!.en;
+    await tester.enterText(find.byType(TextField).last, 'I use ' + en + ' now');
     await tester.tap(find.text('发送'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 80));
     await tester.pumpAndSettle();
-    expect(poster.calls, isNotEmpty);
-    final call = poster.calls.single;
-    expect(call.body['max_tokens'], 400);
-    expect(call.body['temperature'], 0);
-    expect(call.body['thinking'], {'type': 'disabled'});
-    expect(call.body.containsKey('tools'), isFalse);
-    expect(call.headers['Authorization'], 'Bearer test-key');
-    expect(store.sentenceSnapshot().firstWhere((e) => e['wordId'] == wordId)['done'], isTrue);
-    expect(store.sentenceSnapshot().firstWhere((e) => e['wordId'] == wordId)['pass'], isFalse);
+    expect(store.wordUsed(wordId), isTrue);
+    expect(store.practiceRounds, 1);
     expect(store.checkedIn, isFalse);
   });
 
@@ -261,7 +241,7 @@ void main() {
     expect(find.text('开始今天'), findsOneWidget);
   });
 
-  testWidgets('closing 认词 keeps progress and resumes on the next card', (
+  testWidgets('closing coach chat keeps 懂了 and resumes', (
     tester,
   ) async {
     final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
@@ -275,19 +255,19 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('认识了'));
+    await tester.tap(find.text('懂了').first);
     await tester.pumpAndSettle();
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
-    expect(find.text('继续认词'), findsOneWidget);
+    expect(find.text('继续练'), findsOneWidget);
 
-    await tester.tap(find.text('继续认词'));
+    await tester.tap(find.text('继续练'));
     await tester.pumpAndSettle();
-    expect(find.text('认识了'), findsOneWidget);
-    expect(find.text('hello'), findsNothing);
+    expect(find.text('懂了'), findsWidgets);
+    expect(store.vocabSeen('cc_a1_hello_noun_ce4a5e'), isTrue);
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
     expect(poster.calls, isEmpty);

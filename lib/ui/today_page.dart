@@ -83,39 +83,29 @@ class _TodayPageState extends State<TodayPage> {
                       runSpacing: 8,
                       children: [
                         ProgressChip(
-                          label: '认词',
+                          label: '懂了',
                           done: store.vocabDone,
-                          icon: Icons.menu_book_rounded,
+                          icon: Icons.visibility_rounded,
                         ),
                         ProgressChip(
-                          label: '造句',
+                          label: '用过',
                           done: store.sentencesDone,
-                          icon: Icons.edit_note_rounded,
+                          icon: Icons.chat_bubble_outline_rounded,
                         ),
                         ProgressChip(
-                          label: '对话',
+                          label: '轮次',
                           done: store.dialogueDone,
                           icon: Icons.forum_outlined,
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Icon(
-                          store.scene == null
-                              ? Icons.movie_creation_outlined
-                              : Icons.movie_filter_rounded,
-                          size: 16,
-                          color: muted,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          '场景：${_sceneStatus(store)}',
-                          style: const TextStyle(color: muted),
-                        ),
-                      ],
-                    ),
+                    if (!store.checkedIn) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        store.progressRemainderLine(),
+                        style: const TextStyle(color: muted, fontSize: 13),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -131,7 +121,7 @@ class _TodayPageState extends State<TodayPage> {
               if (!model.hasDeepSeekKey) ...[
                 const SizedBox(height: 10),
                 const Text(
-                  '还没填 DeepSeek 密钥：可以认词，生成场景和批改需到「我的」填写。',
+                  '还没填 DeepSeek 密钥：可点词卡「懂了」；跟教练对话需到「我的」填写。',
                   style: TextStyle(fontSize: 13, color: muted),
                 ),
               ],
@@ -148,7 +138,7 @@ class _TodayPageState extends State<TodayPage> {
               ],
               const SizedBox(height: 8),
               const Text(
-                '认词只看词卡；造句和短对话才动笔。到期错词排在对话后再练。',
+                '点进教练聊天练今天的词：词卡「懂了」、对话里「用过」、大约几轮即可。到期错词可另练。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
               if (tomorrowLine != null) ...[
@@ -265,12 +255,6 @@ class _TodayPageState extends State<TodayPage> {
         ],
       ),
     );
-  }
-
-  String _sceneStatus(LessonStore store) {
-    if (store.sceneInFlight && store.scene == null) return '生成中';
-    if (store.scene == null) return '未生成';
-    return '已生成';
   }
 
   void _openPrimary(BuildContext context, AppModel model) {

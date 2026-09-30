@@ -560,6 +560,68 @@ void main() {
     expect(store.tomorrowReviewPreviewLine(), isNull);
   });
 
+  test('chat ledger: 懂了 + 用过 + rounds check-in', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 7, 10));
+    final plan = store.ensureTodayPlan();
+    expect(store.checkedIn, isFalse);
+    expect(store.homeActionLabel(), '开始今天');
+    expect(store.progressRemainderLine(), contains('还差'));
+
+    for (final id in plan.newWordIds) {
+      final feedback = store.acknowledgeWord(id);
+      expect(feedback!.correct, isTrue);
+      expect(store.vocabSeen(id), isTrue);
+    }
+    expect(store.vocabDone, isTrue);
+    expect(store.checkedIn, isFalse);
+    expect(store.homeActionLabel(), '继续练');
+
+    final first = plan.newWordIds.first;
+    final en = store.word(first)!.en;
+    final hits = store.markWordsUsedInText('I like $en today.');
+    expect(hits, contains(first));
+    expect(store.wordUsed(first), isTrue);
+    for (final id in plan.newWordIds.skip(1)) {
+      store.markWordUsed(id);
+    }
+    expect(store.sentencesDone, isTrue);
+    expect(store.checkedIn, isFalse);
+
+    for (var i = 0; i < targetPracticeRounds; i++) {
+      expect(store.dialogueDone, isFalse);
+      store.recordPracticeRound();
+    }
+    expect(store.practiceRounds, targetPracticeRounds);
+    expect(store.dialogueDone, isTrue);
+    expect(store.checkedIn, isTrue);
+    expect(store.progressRemainderLine(), '今天练完了');
+    expect(store.homeActionLabel(), '回看今天');
+
+    store.markWordUsed(first);
+    store.recordPracticeRound();
+    expect(store.practiceRounds, targetPracticeRounds);
+    expect(store.checkedIn, isTrue);
+  });
+
+  test('markWordsUsedInText respects word boundaries', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 7, 11));
+    final plan = store.ensureTodayPlan();
+    final goodId = plan.newWordIds
+        .where((id) => store.word(id)?.en.toLowerCase() == 'good')
+        .firstOrNull;
+    if (goodId != null) {
+      expect(store.markWordsUsedInText('goodbye'), isEmpty);
+      expect(store.wordUsed(goodId), isFalse);
+      expect(store.markWordsUsedInText('a good day'), contains(goodId));
+      expect(store.wordUsed(goodId), isTrue);
+    } else {
+      final id = plan.newWordIds.first;
+      final en = store.word(id)!.en.toLowerCase();
+      expect(store.markWordsUsedInText('${en}xxx'), isEmpty);
+      expect(store.markWordsUsedInText('xx $en yy'), contains(id));
+    }
+  });
+
   test('tomorrow preview lists due reviews after check-in when available', () {
     var day = DateTime(2026, 6, 1);
     final store = fixtureStore(clock: () => day);

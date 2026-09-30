@@ -59,6 +59,7 @@ class ChatThread {
     required String model,
     required String installId,
     String reasoningEffort = 'off',
+    String? systemPrompt,
     void Function()? onUpdate,
   }) async {
     final trimmed = text.trim();
@@ -82,6 +83,7 @@ class ChatThread {
         model: model,
         installId: installId,
         reasoningEffort: reasoningEffort,
+        systemPrompt: systemPrompt,
         onUpdate: onUpdate,
       );
     } finally {
@@ -99,6 +101,7 @@ class ChatThread {
     required String model,
     required String installId,
     String reasoningEffort = 'off',
+    String? systemPrompt,
     void Function()? onUpdate,
   }) async {
     if (busy) return '正在请求';
@@ -116,6 +119,7 @@ class ChatThread {
         model: model,
         installId: installId,
         reasoningEffort: reasoningEffort,
+        systemPrompt: systemPrompt,
         onUpdate: onUpdate,
       );
     } finally {
@@ -132,6 +136,7 @@ class ChatThread {
     required String model,
     required String installId,
     required String reasoningEffort,
+    String? systemPrompt,
     void Function()? onUpdate,
   }) async {
     var projection = projectContext(
@@ -176,7 +181,7 @@ class ChatThread {
     }
 
     final history = [
-      {'role': 'system', 'content': coachSystemPrompt},
+      {'role': 'system', 'content': systemPrompt ?? coachSystemPrompt},
       for (final message in projection.history)
         {
           'role': message.role == ChatRole.user ? 'user' : 'assistant',
