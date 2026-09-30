@@ -547,6 +547,49 @@ void main() {
     await store.ensureTodayPlanAsync();
     expect(calls, 1);
   });
+
+
+  test('sentence soft copy and dialogue openings', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 5, 1));
+    final plan = store.ensureTodayPlan();
+    final firstId = plan.newWordIds.first;
+    expect(store.sentencePrompt(firstId), contains('写一句就能进下一步'));
+    expect(store.sentenceHintDirection(firstId), contains('弱提示'));
+    expect(store.dialogueOpeningHints(), isNotEmpty);
+    expect(store.dialogueOpeningHints().length, lessThanOrEqualTo(3));
+    expect(store.tomorrowReviewPreviewLine(), isNull);
+  });
+
+  test('tomorrow preview lists due reviews after check-in when available', () {
+    var day = DateTime(2026, 6, 1);
+    final store = fixtureStore(clock: () => day);
+    final plan = store.ensureTodayPlan();
+    // Acknowledge all but last with success (review = +2 days).
+    for (var i = 0; i < plan.newWordIds.length - 1; i++) {
+      store.acknowledgeVocab();
+      store.advanceVocab();
+    }
+    // Last word wrong → error due tomorrow.
+    final wrongId = store.currentVocabId!;
+    store.submitVocab('nope');
+    store.advanceVocab();
+    for (final id in plan.newWordIds) {
+      store.applyModelResponse(
+        task: 'grade_open',
+        content: _passGrade,
+        finishReason: 'stop',
+        sentenceWordId: id,
+      );
+    }
+    store.markDialogueDone();
+    expect(store.checkedIn, isTrue);
+    final preview = store.tomorrowReviewPreviewLine();
+    expect(preview, isNotNull);
+    expect(preview, contains('明天复习预告'));
+    expect(preview, contains(store.word(wrongId)!.en));
+    expect(store.tomorrowReviewWordIds(), [wrongId]);
+  });
+
 }
 
 void _reviewError(LessonStore store, String id, {required bool correctly}) {

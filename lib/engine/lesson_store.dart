@@ -840,8 +840,72 @@ class LessonStore {
 
   String sentencePrompt(String wordId) {
     final word = _words[wordId];
-    if (word == null) return '刚看过的词，用它写一句。';
-    return '刚看过的词，用「${word.en}」（${word.cn}）写一句。';
+    if (word == null) return '用今天的词写一句；写一句就能进下一步。';
+    return '用「${word.en}」（${word.cn}）写一句；写一句就能进下一步。';
+  }
+
+  /// Soft direction under the sentence prompt (not a hard template).
+  String sentenceHintDirection(String wordId) {
+    final word = _words[wordId];
+    final sample = word?.en ?? '…';
+    return '弱提示：可从 I / We / There is 起头，把 $sample 放进一句完整英文。';
+  }
+
+  /// Words scheduled to resurface tomorrow (success reviews + due errors).
+  List<String> tomorrowReviewWordIds() {
+    final tomorrow = addDays(today, 1);
+    final ids = <String>[];
+    final seen = <String>{};
+    for (final entry in _reviews.entries) {
+      final next = entry.value.nextReview;
+      if (next == null) continue;
+      if (_key(next) != _key(tomorrow)) continue;
+      if (_isActiveError(entry.key)) continue;
+      if (seen.add(entry.key)) ids.add(entry.key);
+    }
+    for (final entry in _errors.entries) {
+      if (entry.value.resolved) continue;
+      if (_key(entry.value.nextReview) != _key(tomorrow)) continue;
+      if (seen.add(entry.key)) ids.add(entry.key);
+    }
+    return ids;
+  }
+
+  /// One-line local preview after check-in; null when nothing is due tomorrow.
+  String? tomorrowReviewPreviewLine({int maxWords = 4}) {
+    final ids = tomorrowReviewWordIds();
+    if (ids.isEmpty) return null;
+    final labels = <String>[];
+    for (final id in ids.take(maxWords)) {
+      final w = _words[id];
+      labels.add(w?.en ?? id);
+    }
+    final more = ids.length > maxWords ? ' 等${ids.length}个' : '';
+    return '明天复习预告：${labels.join(' · ')}$more';
+  }
+
+  /// 2–3 optional first-turn dialogue openings using today's words.
+  List<String> dialogueOpeningHints({int max = 3}) {
+    final plan = ensureTodayPlan();
+    final openings = <String>[];
+    for (final id in plan.newWordIds) {
+      if (openings.length >= max) break;
+      final word = _words[id];
+      if (word == null) continue;
+      final en = word.en;
+      final pos = word.pos.toLowerCase();
+      if (pos.contains('verb')) {
+        openings.add('Can I $en …?');
+      } else if (pos.contains('adj')) {
+        openings.add('It looks $en.');
+      } else {
+        openings.add('About $en …');
+      }
+    }
+    if (openings.isEmpty) {
+      openings.addAll(['Sure.', 'I see.', 'Could you help me?']);
+    }
+    return openings.take(max).toList();
   }
 
   List<Map<String, Object?>> sentenceSnapshot() {

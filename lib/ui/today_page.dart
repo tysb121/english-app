@@ -36,6 +36,8 @@ class _TodayPageState extends State<TodayPage> {
       ...plan.newWordIds.skip(2),
       ...plan.reviewWordIds,
     ];
+    final tomorrowLine =
+        store.checkedIn ? store.tomorrowReviewPreviewLine() : null;
     return SoftScaffold(
       body: Stack(
         children: [
@@ -149,6 +151,13 @@ class _TodayPageState extends State<TodayPage> {
                 '认词只看词卡；造句和短对话才动笔。到期错词排在对话后再练。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
+              if (tomorrowLine != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  tomorrowLine,
+                  style: const TextStyle(fontSize: 13, color: pine),
+                ),
+              ],
               const SizedBox(height: 8),
               const SectionTitle('今天的说法', icon: Icons.chat_bubble_outline_rounded),
               for (final id in preview) _card(store, id),

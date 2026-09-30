@@ -38,13 +38,16 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final stage = _stage(store);
     final sceneLoading = (_busy && stage == _Stage.scene) || store.sceneInFlight;
     return SoftScaffold(
-      title: widget.readOnly ? '回看今天' : '今日教练',
+      title: widget.readOnly ? '回看今天' : _titleFor(store, stage),
       leading: IconButton(
         icon: const Icon(Icons.close),
         onPressed: () => Navigator.of(context).pop(),
       ),
       body: Column(
         children: [
+          if (!widget.readOnly &&
+              (stage == _Stage.sentences || stage == _Stage.dialogue))
+            _stepTopBar(store, stage),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
@@ -115,48 +118,68 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: mist.withValues(alpha: 0.96),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: softBorder),
-                    boxShadow: [
-                      BoxShadow(
-                        color: indigo.withValues(alpha: 0.06),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (stage == _Stage.sentences) _todayWordChips(store),
+                    if (stage == _Stage.dialogue &&
+                        store.requiredTodayPlan.dialogueCursor == 0)
+                      _dialogueOpeningChips(store),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: mist.withValues(alpha: 0.96),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: softBorder),
+                        boxShadow: [
+                          BoxShadow(
+                            color: indigo.withValues(alpha: 0.06),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _controller,
-                            enabled: !_busy,
-                            decoration: const InputDecoration(
-                              hintText: '输入英文或中文',
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              filled: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _controller,
+                                enabled: !_busy,
+                                decoration: InputDecoration(
+                                  hintText: stage == _Stage.sentences
+                                      ? '写一句英文就能进下一步'
+                                      : stage == _Stage.dialogue &&
+                                              store.requiredTodayPlan
+                                                      .dialogueCursor ==
+                                                  0
+                                          ? '接一句，或点上方开口'
+                                          : '输入英文或中文',
+                                  border: InputBorder.none,
+                                  enabledBorder: InputBorder.none,
+                                  focusedBorder: InputBorder.none,
+                                  filled: false,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(width: 6),
+                            FilledButton.icon(
+                              onPressed:
+                                  _busy ? null : () => _onSend(model, stage),
+                              icon: Icon(
+                                _busy
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.send_rounded,
+                                size: 18,
+                              ),
+                              label: Text(_busy ? '批改中' : '发送'),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 6),
-                        FilledButton.icon(
-                          onPressed: _busy ? null : () => _onSend(model, stage),
-                          icon: Icon(
-                            _busy ? Icons.hourglass_top_rounded : Icons.send_rounded,
-                            size: 18,
-                          ),
-                          label: Text(_busy ? '批改中' : '发送'),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),
@@ -292,20 +315,42 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final scene = store.requiredTodayPlan.scene;
     if (scene == null) return const SizedBox.shrink();
     final cursor = store.requiredTodayPlan.dialogueCursor;
+    final total = scene.dialogue.length;
     final line = scene.dialogue.isEmpty
         ? null
         : scene.dialogue[cursor.clamp(0, scene.dialogue.length - 1)];
     final model = AppScope.of(context);
+    final firstTurn = cursor == 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(scene.scenarioCn, style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(
+          total == 0 ? '对话' : '对话 ${(cursor + 1).clamp(1, total)}/$total',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+        ),
         const SizedBox(height: 8),
         if (line != null) ...[
           Text('${line.speaker}: ${line.en}'),
           Text(line.cn, style: const TextStyle(color: Color(0xFF4E4A43))),
           const SizedBox(height: 8),
-          const Text('用英文接一句，发送后交给批改。'),
+          Text(
+            firstTurn
+                ? '第一句：可点下方开口，或自己写一句接上。'
+                : '用英文接一句，发送后交给批改。',
+            style: const TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+          ),
+          if (firstTurn) ...[
+            const SizedBox(height: 8),
+            AppCard(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Text(
+                _dialogueSentenceSlot(store, line),
+                style: const TextStyle(fontSize: 14, color: muted),
+              ),
+            ),
+          ],
         ],
         if (!model.hasDeepSeekKey) ...[
           const SizedBox(height: 8),
@@ -339,7 +384,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
         const Text(
-          '刚看过的词，用它写一句；批改后才算做完，不能跳过。',
+          '写一句就能进下一步；点输入框上方的今天词可填入。',
           style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
         ),
         const SizedBox(height: 8),
@@ -350,8 +395,16 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
               '${word.en} · ${word.cn} · ${posLabelZh(word.pos)}',
               style: const TextStyle(color: Color(0xFF4E4A43)),
             ),
+          const SizedBox(height: 6),
+          Text(
+            store.sentenceHintDirection(wordId),
+            style: const TextStyle(fontSize: 12, color: muted),
+          ),
           const SizedBox(height: 8),
-          const Text('在底部输入框造句并发送。'),
+          const Text(
+            '在底部输入框写一句并发送。',
+            style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+          ),
         ] else
           const Text('今天的造句已做完。'),
         if (!model.hasDeepSeekKey) ...[
@@ -507,12 +560,13 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
               _Bubble(
                 role: _BubbleRole.coach,
                 text: grade.pass
-                    ? '✓ 通过（造句 $ordinal/$total）\n${grade.correctedEn}'
-                    : '✗ 未通过（造句 $ordinal/$total，仍算做完）\n'
+                    ? '这句可以 · 造句 $ordinal/$total\n${grade.correctedEn}'
+                    : '对照一下 · 造句 $ordinal/$total（已记下，可继续）\n'
                         '${grade.errors.take(2).map((e) => '${e.excerpt} → ${e.fix}（${e.whyCn}）').join('\n')}\n'
                         '改写：${grade.correctedEn}',
               ),
             );
+            _flashProgress('造句 $ordinal/$total');
           }
         }
         model.commit();
@@ -546,16 +600,21 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       } else {
         _retry = null;
         final grade = store.lastGrade;
+        final totalLines = scene?.dialogue.length ?? 0;
+        final turn = (cursor + 1).clamp(1, totalLines == 0 ? 1 : totalLines);
         if (grade != null) {
           _local.add(
             _Bubble(
               role: _BubbleRole.coach,
               text: grade.pass
-                  ? '✓ 通过\n${grade.correctedEn}\n可以继续下一句。'
-                  : '✗ 未通过，对照后再接下一句\n'
+                  ? '这句可以 · 对话 $turn/${totalLines == 0 ? turn : totalLines}\n${grade.correctedEn}'
+                  : '对照一下 · 对话 $turn/${totalLines == 0 ? turn : totalLines}（可继续下一句）\n'
                       '${grade.errors.take(2).map((e) => '${e.excerpt} → ${e.fix}（${e.whyCn}）').join('\n')}\n'
                       '改写：${grade.correctedEn}',
             ),
+          );
+          _flashProgress(
+            '对话 $turn/${totalLines == 0 ? turn : totalLines}',
           );
         }
         store.advanceDialogue();
@@ -625,7 +684,188 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       content: bubble.text,
     );
   }
+
+  String _titleFor(LessonStore store, _Stage stage) {
+    final plan = store.requiredTodayPlan;
+    switch (stage) {
+      case _Stage.vocab:
+        final total = store.vocabQueue(plan).length;
+        final done = plan.vocabCursor.clamp(0, total);
+        return '认词 $done/$total';
+      case _Stage.sentences:
+        final total = plan.newWordIds.length;
+        final done = store.sentenceDoneCount.clamp(0, total);
+        return '今天词 / 造句 $done/$total';
+      case _Stage.scene:
+        return '写场景';
+      case _Stage.dialogue:
+        final total = plan.scene?.dialogue.length ?? 0;
+        final cur = plan.dialogueCursor.clamp(0, total);
+        if (total == 0) return '对话';
+        return '对话 ${(cur + 1).clamp(1, total)}/$total';
+      case _Stage.errors:
+        return '错词';
+      case _Stage.notes:
+        return '笔记';
+      case _Stage.done:
+        return '今天完成';
+    }
+  }
+
+  Widget _stepTopBar(LessonStore store, _Stage stage) {
+    final plan = store.requiredTodayPlan;
+    final words = <Widget>[
+      for (final id in plan.newWordIds)
+        Padding(
+          padding: const EdgeInsets.only(right: 6),
+          child: GestureDetector(
+            onTap: stage == _Stage.sentences && !_busy
+                ? () => _insertIntoInput(store.word(id)?.en ?? id)
+                : null,
+            child: Text(
+              store.word(id)?.en ?? id,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: stage == _Stage.sentences &&
+                        id == store.currentSentenceWordId
+                    ? pine
+                    : muted,
+                decoration: stage == _Stage.sentences
+                    ? TextDecoration.underline
+                    : TextDecoration.none,
+                decorationColor: softBorder,
+              ),
+            ),
+          ),
+        ),
+    ];
+    String progress;
+    if (stage == _Stage.sentences) {
+      final total = plan.newWordIds.length;
+      final done = store.sentenceDoneCount.clamp(0, total);
+      progress = '造句 $done/$total';
+    } else {
+      final total = plan.scene?.dialogue.length ?? 0;
+      final cur = plan.dialogueCursor;
+      progress = total == 0
+          ? '对话'
+          : '对话 ${(cur + 1).clamp(1, total)}/$total';
+    }
+    return Material(
+      color: mist.withValues(alpha: 0.9),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+        child: Row(
+          children: [
+            const Text(
+              '今天词',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: pine),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: words),
+              ),
+            ),
+            Text(
+              progress,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ink),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _todayWordChips(LessonStore store) {
+    final plan = store.requiredTodayPlan;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          for (final id in plan.newWordIds)
+            ActionChip(
+              label: Text(store.word(id)?.en ?? id),
+              onPressed: _busy
+                  ? null
+                  : () => _insertIntoInput(store.word(id)?.en ?? id),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dialogueOpeningChips(LessonStore store) {
+    final openings = store.dialogueOpeningHints();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            '可选开口（点一下填入）',
+            style: TextStyle(fontSize: 12, color: muted),
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final opening in openings)
+                ActionChip(
+                  label: Text(opening),
+                  onPressed: _busy ? null : () => _insertIntoInput(opening),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _dialogueSentenceSlot(LessonStore store, SceneLine line) {
+    final word = store.scheduledNewWords()
+        .map(store.word)
+        .whereType<Lexeme>()
+        .map((w) => w.en)
+        .take(1)
+        .toList();
+    final hintWord = word.isEmpty ? '…' : word.first;
+    return '句子槽：________（可用 $hintWord）· 对方在说「${line.cn}」';
+  }
+
+  void _insertIntoInput(String piece) {
+    final text = _controller.text;
+    final needsSpace = text.isNotEmpty && !text.endsWith(' ');
+    final next = '$text${needsSpace ? ' ' : ''}$piece';
+    _controller.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
+    );
+    setState(() {});
+  }
+
+  void _flashProgress(String label) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(label),
+        duration: const Duration(milliseconds: 1200),
+      ),
+    );
+  }
 }
+
 
 enum _Stage { vocab, sentences, scene, dialogue, errors, notes, done }
 
