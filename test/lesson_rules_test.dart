@@ -55,7 +55,7 @@ void main() {
     expect(store.ensureTodayPlan().newWordIds.first, 'cc_a1_hello_noun_ce4a5e');
   });
 
-  test('upgrade nudge when untaught stock under ~3 days', () {
+  test('upgrade nudge only when untaught stock is exhausted', () {
     final store = fixtureStore(
       clock: () => DateTime(2026, 4, 1),
       level: '入门',
@@ -64,26 +64,39 @@ void main() {
     expect(store.untaughtInLevelCount(), 15);
     expect(store.shouldOfferLevelUpgrade, isFalse);
 
-    final plan = store.ensureTodayPlan();
-    expect(plan.newWordIds, hasLength(5));
+    // One day at default pace leaves stock; must not nudge yet.
+    store.dailyWords = 5;
+    final partial = store.ensureTodayPlan();
+    expect(partial.newWordIds, hasLength(5));
     expect(store.untaughtInLevelCount(), 10);
-    expect(store.untaughtInLevelCount() < store.dailyWords * 3, isTrue);
-    expect(store.shouldOfferLevelUpgrade, isTrue);
-
-    store.dismissUpgradeNudge();
     expect(store.shouldOfferLevelUpgrade, isFalse);
 
-    store.upgradeNudgeDismissed = false;
-    expect(store.acceptLevelUpgrade(), isTrue);
-    expect(store.level, '基础');
-    expect(store.ensureTodayPlan().newWordIds, plan.newWordIds);
-    // Fixture A2 pool is tiny, so the next band may also look low-stock.
-    expect(store.nextProductLevel, '进阶');
-    expect(store.shouldOfferLevelUpgrade, isTrue);
+    // Exhaust the rest of A1 in one frozen plan.
+    store.dailyWords = 15;
+    // Plan already frozen for today — redraw on a fresh day.
+    final dayExhaust = DateTime(2026, 4, 2);
+    final exhausted = fixtureStore(clock: () => dayExhaust, level: '入门');
+    exhausted.restore(store.progressJson());
+    exhausted.dailyWords = 15;
+    final plan = exhausted.ensureTodayPlan();
+    expect(plan.newWordIds, hasLength(10));
+    expect(exhausted.untaughtInLevelCount(), 0);
+    expect(exhausted.shouldOfferLevelUpgrade, isTrue);
 
-    final day2 = DateTime(2026, 4, 2);
-    final store2 = fixtureStore(clock: () => day2, level: '基础');
-    store2.restore(store.progressJson());
+    exhausted.dismissUpgradeNudge();
+    expect(exhausted.shouldOfferLevelUpgrade, isFalse);
+
+    exhausted.upgradeNudgeDismissed = false;
+    expect(exhausted.acceptLevelUpgrade(), isTrue);
+    expect(exhausted.level, '基础');
+    expect(exhausted.ensureTodayPlan().newWordIds, plan.newWordIds);
+    // Fixture A2 has 5 words; none taught yet → not exhausted.
+    expect(exhausted.nextProductLevel, '进阶');
+    expect(exhausted.shouldOfferLevelUpgrade, isFalse);
+
+    final day3 = DateTime(2026, 4, 3);
+    final store2 = fixtureStore(clock: () => day3, level: '基础');
+    store2.restore(exhausted.progressJson());
     expect(store2.level, '基础');
     final next = store2.ensureTodayPlan();
     for (final id in next.newWordIds) {
@@ -91,21 +104,29 @@ void main() {
     }
   });
 
-  test('no upgrade nudge at top level or when stock is enough', () {
+  test('no upgrade nudge at top level or when stock remains', () {
     final top = fixtureStore(clock: () => DateTime(2026, 5, 1), level: '进阶');
+    top.dailyWords = 5;
     top.ensureTodayPlan();
+    // 5 B1 words → 0 left after one day, but no next band.
+    expect(top.untaughtInLevelCount(), 0);
     expect(top.nextProductLevel, isNull);
     expect(top.shouldOfferLevelUpgrade, isFalse);
 
     final rich = fixtureStore(clock: () => DateTime(2026, 5, 2), level: '入门');
     rich.dailyWords = 5;
-    // 15 A1 words, no plan yet → not under 15 threshold.
+    // 15 A1 words still untaught → no nudge.
+    expect(rich.shouldOfferLevelUpgrade, isFalse);
+    rich.ensureTodayPlan();
+    expect(rich.untaughtInLevelCount(), 10);
     expect(rich.shouldOfferLevelUpgrade, isFalse);
   });
 
   test('upgrade nudge flag round-trips in progress JSON', () {
     final store = fixtureStore(clock: () => DateTime(2026, 6, 1), level: '入门');
+    store.dailyWords = 15;
     store.ensureTodayPlan();
+    expect(store.untaughtInLevelCount(), 0);
     expect(store.shouldOfferLevelUpgrade, isTrue);
     store.dismissUpgradeNudge();
     final raw = store.progressJson();
@@ -113,6 +134,18 @@ void main() {
     copy.restore(raw);
     expect(copy.upgradeNudgeDismissed, isTrue);
     expect(copy.shouldOfferLevelUpgrade, isFalse);
+  });
+
+  test('ensureTodayPlan uses pickUntaughtIds for book slots', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 6, 10), level: '入门');
+    final manual = store.pickUntaughtIds(
+      level: 'a1',
+      limit: 5,
+      exclude: const {},
+    );
+    expect(manual, hasLength(5));
+    final plan = store.ensureTodayPlan();
+    expect(plan.newWordIds, manual);
   });
 
   test('frozen plan, vocab, reviews, errors, check-in, and notes', () {

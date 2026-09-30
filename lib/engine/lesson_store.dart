@@ -257,7 +257,7 @@ class LessonStore {
   int dailyWords = 5;
   String level = '入门';
   bool levelChosen = false;
-  /// User dismissed the low-stock upgrade card for the current level stock.
+  /// User dismissed the exhausted-level upgrade card for the current level.
   bool upgradeNudgeDismissed = false;
   String reasoningEffort = 'off';
   String goal = '职场';
@@ -288,20 +288,16 @@ class LessonStore {
       picked.add(word.id);
     }
 
-    // Remaining slots: random among untaught book words in the current CEFR level.
+    // Remaining slots: pickUntaughtIds (in-memory twin of the SQL picker).
     if (picked.length < dailyWords) {
-      final code = cefrCodeForLevel(level);
-      final pool = [
-        for (final word in _words.values)
-          if (word.source == WordSource.book &&
-              word.level == code &&
-              !used.contains(word.id) &&
-              !picked.contains(word.id))
-            word.id,
-      ];
-      pool.shuffle(_random);
       final need = dailyWords - picked.length;
-      picked.addAll(pool.take(need));
+      picked.addAll(
+        pickUntaughtIds(
+          level: cefrCodeForLevel(level),
+          limit: need,
+          exclude: {...used, ...picked},
+        ),
+      );
     }
     final reviews = <String>[];
     for (final entry in _reviews.entries) {
@@ -370,12 +366,6 @@ class LessonStore {
     return count;
   }
 
-  /// Days of new words left at [dailyWords] pace (floor).
-  int untaughtDaysRemaining() {
-    if (dailyWords <= 0) return 0;
-    return untaughtInLevelCount() ~/ dailyWords;
-  }
-
   /// Next product level, or null at the top band.
   String? get nextProductLevel {
     final current = normalizeLevel(level);
@@ -384,11 +374,30 @@ class LessonStore {
     return productLevels[index + 1];
   }
 
-  /// Offer upgrade when remaining untaught words are under ~3 days of dailyWords.
+  /// Random untaught book ids for CEFR [level] (a1|a2|b1), excluding [exclude].
+  /// In-memory twin of the SQL picker; used by [ensureTodayPlan].
+  List<String> pickUntaughtIds({
+    required String level,
+    required int limit,
+    required Set<String> exclude,
+  }) {
+    if (limit <= 0) return [];
+    final pool = [
+      for (final word in _words.values)
+        if (word.source == WordSource.book &&
+            word.level == level &&
+            !exclude.contains(word.id))
+          word.id,
+    ];
+    pool.shuffle(_random);
+    return pool.take(limit).toList();
+  }
+
+  /// Offer upgrade only when this CEFR band has zero untaught book words left.
   bool get shouldOfferLevelUpgrade {
     if (upgradeNudgeDismissed) return false;
     if (nextProductLevel == null) return false;
-    return untaughtInLevelCount() < dailyWords * 3;
+    return untaughtInLevelCount() == 0;
   }
 
   /// Confirm upgrade: level changes now; today's frozen plan is unchanged.

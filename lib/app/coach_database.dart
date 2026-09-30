@@ -184,6 +184,8 @@ CREATE TABLE chat_checkpoints (
   }
 
   /// Random untaught book ids for [level] (a1|a2|b1), excluding [exclude].
+  /// Mirrors LessonStore.pickUntaughtIds; plan creation uses the in-memory twin
+  /// so ensureTodayPlan stays sync (Lexeme lookups stay in RAM).
   Future<List<String>> pickUntaughtIds({
     required String level,
     required int limit,
@@ -199,7 +201,7 @@ CREATE TABLE chat_checkpoints (
     );
     final pool = [
       for (final row in rows)
-        if (!exclude.contains(row['id'])) row['id']! as String,
+        if (!exclude.contains(row['id'] as String)) row['id']! as String,
     ];
     pool.shuffle(random ?? Random());
     return pool.take(limit).toList();
