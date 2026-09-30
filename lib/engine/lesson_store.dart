@@ -909,7 +909,7 @@ class LessonStore {
     }
   }
 
-  /// Words still missing 懂了 or 用过.
+  /// Words still missing 看过了 (seen) or 用过.
   int get remainingWordTasks {
     final plan = ensureTodayPlan();
     var n = 0;
@@ -919,13 +919,34 @@ class LessonStore {
     return n;
   }
 
-  /// Progress remainder for the chat top bar.
+  /// Today's new words not yet marked 看过了.
+  int get remainingUnseenWords {
+    final plan = ensureTodayPlan();
+    var n = 0;
+    for (final id in plan.newWordIds) {
+      if (!vocabSeen(id)) n += 1;
+    }
+    return n;
+  }
+
+  /// Today's new words not yet marked 用过.
+  int get remainingUnusedWords {
+    final plan = ensureTodayPlan();
+    var n = 0;
+    for (final id in plan.newWordIds) {
+      if (!plan.sentenceResults.containsKey(id)) n += 1;
+    }
+    return n;
+  }
+
+  /// Progress remainder for home + chat: one readable line.
   String progressRemainderLine() {
-    if (checkedIn) return '今天练完了';
-    final words = remainingWordTasks;
+    if (checkedIn) return '今日练习完成';
+    final unseen = remainingUnseenWords;
+    final unused = remainingUnusedWords;
     final rounds = remainingPracticeRounds;
-    if (words == 0 && rounds == 0) return '今天练完了';
-    return '还差：认识 $words 个词 · 对话 $rounds 轮';
+    if (unseen == 0 && unused == 0 && rounds == 0) return '今日练习完成';
+    return '还差：还没看$unseen / 还没用$unused / 还差${rounds}轮';
   }
 
   String sentencePrompt(String wordId) {

@@ -85,35 +85,16 @@ class _TodayPageState extends State<TodayPage> {
                         ],
                       ],
                     ),
-                    const SizedBox(height: 14),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        ProgressChip(
-                          label: '懂了',
-                          done: store.vocabDone,
-                          icon: Icons.visibility_rounded,
-                        ),
-                        ProgressChip(
-                          label: '用过',
-                          done: store.sentencesDone,
-                          icon: Icons.chat_bubble_outline_rounded,
-                        ),
-                        ProgressChip(
-                          label: '轮次',
-                          done: store.dialogueDone,
-                          icon: Icons.forum_outlined,
-                        ),
-                      ],
-                    ),
-                    if (!store.checkedIn) ...[
-                      const SizedBox(height: 10),
-                      Text(
-                        store.progressRemainderLine(),
-                        style: const TextStyle(color: muted, fontSize: 13),
+                    const SizedBox(height: 12),
+                    Text(
+                      store.progressRemainderLine(),
+                      style: TextStyle(
+                        color: store.checkedIn ? pine : muted,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        height: 1.35,
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
@@ -129,7 +110,7 @@ class _TodayPageState extends State<TodayPage> {
               if (!model.hasDeepSeekKey) ...[
                 const SizedBox(height: 10),
                 const Text(
-                  '还没填写 DeepSeek 密钥：可以先在下方词卡点「懂了」；要和教练对话，请到「我的」填写。',
+                  '还没填写 DeepSeek 密钥：可以先在下方词卡点一下「看过了」；要和教练对话，请到「我的」填写。',
                   style: TextStyle(fontSize: 13, color: muted),
                 ),
               ],
@@ -157,7 +138,7 @@ class _TodayPageState extends State<TodayPage> {
               ],
               const SizedBox(height: 8),
               const Text(
-                '先在词卡上点「懂了」，再进教练聊天「用过」并聊几轮。',
+                '看一眼，再跟教练聊几句就行。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
               if (tomorrowLine != null) ...[
@@ -224,91 +205,104 @@ class _TodayPageState extends State<TodayPage> {
     final used = store.wordUsed(id);
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: mist,
+      child: Material(
+        color: mist,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: used
-                ? pine.withValues(alpha: 0.35)
-                : known
-                ? pine.withValues(alpha: 0.18)
-                : softBorder,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: (used || known ? pine : indigo).withValues(
-                    alpha: 0.12,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  used
-                      ? Icons.check_circle_rounded
-                      : known
-                      ? Icons.visibility_rounded
-                      : Icons.visibility_off_outlined,
-                  color: used || known ? pine : indigo,
-                  size: 18,
-                ),
+          onTap: known
+              ? null
+              : () {
+                  store.acknowledgeWord(id);
+                  model.commit();
+                  setState(() {});
+                },
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: used
+                    ? pine.withValues(alpha: 0.35)
+                    : known
+                    ? pine.withValues(alpha: 0.18)
+                    : softBorder,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      known ? word.en : word.cn,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 10, 12, 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: Checkbox(
+                      value: known,
+                      onChanged: known
+                          ? null
+                          : (_) {
+                              store.acknowledgeWord(id);
+                              model.commit();
+                              setState(() {});
+                            },
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                      fillColor: WidgetStateProperty.resolveWith((states) {
+                        if (states.contains(WidgetState.selected)) {
+                          return pine;
+                        }
+                        return null;
+                      }),
+                      side: BorderSide(
+                        color: known || used ? pine : muted,
+                        width: 1.6,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
                       ),
                     ),
-                    Text(
-                      known
-                          ? '${word.cn} · ${posLabelZh(word.pos)}'
-                          : posLabelZh(word.pos),
-                      style: const TextStyle(color: muted, fontSize: 12),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          word.en,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${word.cn} · ${posLabelZh(word.pos)}',
+                          style: const TextStyle(color: muted, fontSize: 12),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                  if (used)
+                    const Text(
+                      '已用',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: pine,
+                      ),
+                    )
+                  else if (known)
+                    const Text(
+                      '看过了',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: muted,
+                      ),
+                    ),
+                ],
               ),
-              if (!known)
-                TextButton(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  onPressed: () {
-                    store.acknowledgeWord(id);
-                    model.commit();
-                    setState(() {});
-                  },
-                  child: const Text('懂了'),
-                )
-              else
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Text(
-                    used ? '已用' : '已懂',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: used ? pine : muted,
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),

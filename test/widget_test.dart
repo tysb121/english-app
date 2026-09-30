@@ -44,6 +44,7 @@ void main() {
     expect(find.text('今日练习'), findsOneWidget);
     expect(find.text('我的'), findsOneWidget);
     expect(find.textContaining('还没填写 DeepSeek 密钥'), findsOneWidget);
+    expect(find.textContaining('看过了'), findsOneWidget);
   });
 
   testWidgets('我的 shows product level labels and tomorrow tip when frozen', (
@@ -124,9 +125,9 @@ void main() {
     }
     await tester.pumpWidget(EnglishApp(model: model));
     expect(find.text('继续练习'), findsOneWidget);
-    expect(find.text('懂了'), findsWidgets);
-    expect(find.text('用过'), findsOneWidget);
-    expect(find.text('轮次'), findsOneWidget);
+    expect(find.textContaining('还没用'), findsOneWidget);
+    expect(find.text('懂了'), findsNothing);
+    expect(find.text('轮次'), findsNothing);
 
     for (final id in store.scheduledNewWords()) {
       store.markWordUsed(id);
@@ -141,10 +142,11 @@ void main() {
     model.commit();
     await tester.pump();
     expect(find.text('回看练习'), findsOneWidget);
+    expect(find.text('今日练习完成'), findsWidgets);
     expect(store.checkedIn, isTrue);
   });
 
-  testWidgets('home shows all today words; coach 懂了 chip offline', (
+  testWidgets('home shows all today words; coach 看过了 chip offline', (
     tester,
   ) async {
     final view = tester.view;
@@ -170,10 +172,13 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.pumpAndSettle();
     expect(find.text('今日练习的词'), findsOneWidget);
-    // Home presents every today word (cn before 懂了), all findable on one screen.
+    expect(find.textContaining('还没看'), findsOneWidget);
+    expect(find.text('看一眼，再跟教练聊几句就行。'), findsOneWidget);
+    // Home presents every today word fully lit: EN + CN, all findable.
     for (final id in ids) {
-      final cn = store.word(id)!.cn;
-      expect(find.text(cn), findsWidgets);
+      final word = store.word(id)!;
+      expect(find.text(word.en), findsWidgets);
+      expect(find.textContaining(word.cn), findsWidgets);
     }
 
     await tester.tap(find.text('开始练习'));
@@ -181,8 +186,8 @@ void main() {
     expect(find.text('跟教练练习'), findsOneWidget);
     expect(find.textContaining('还差'), findsWidgets);
     // Compact chip, not a card wall.
-    expect(find.textContaining('懂了'), findsWidgets);
-    await tester.tap(find.textContaining('hello · 懂了'));
+    expect(find.textContaining('看过了'), findsWidgets);
+    await tester.tap(find.textContaining('hello · 看过了'));
     await tester.pumpAndSettle();
     expect(poster.calls, isEmpty);
     expect(
@@ -271,7 +276,7 @@ void main() {
     expect(find.text('开始练习'), findsOneWidget);
   });
 
-  testWidgets('closing coach chat keeps 懂了 and resumes', (tester) async {
+  testWidgets('closing coach chat keeps 看过了 and resumes', (tester) async {
     final store = fixtureStore(
       clock: () => DateTime(2026, 1, 1),
       levelChosen: true,
@@ -285,8 +290,8 @@ void main() {
     );
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.pumpAndSettle();
-    // Acknowledge on home word card.
-    await tester.tap(find.widgetWithText(TextButton, '懂了').first);
+    // Acknowledge on home word card via checkbox / card tap.
+    await tester.tap(find.byType(Checkbox).first);
     await tester.pumpAndSettle();
     expect(
       store.successReviewOn('cc_a1_hello_noun_ce4a5e'),
@@ -294,14 +299,14 @@ void main() {
     );
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
     expect(find.text('继续练习'), findsOneWidget);
-    expect(find.text('已懂'), findsWidgets);
+    expect(find.text('看过了'), findsWidgets);
 
     await tester.tap(find.text('继续练习'));
     await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
     expect(find.text('继续练习'), findsOneWidget);
-    expect(find.text('已懂'), findsWidgets);
+    expect(find.text('看过了'), findsWidgets);
 
     await tester.tap(find.text('继续练习'));
     await tester.pumpAndSettle();

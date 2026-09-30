@@ -542,11 +542,13 @@ void main() {
     expect(store.tomorrowReviewPreviewLine(), isNull);
   });
 
-  test('chat ledger: 懂了 + 用过 + rounds check-in', () {
+  test('chat ledger: 看过了 + 用过 + rounds check-in', () {
     final store = fixtureStore(clock: () => DateTime(2026, 7, 10));
     final plan = store.ensureTodayPlan();
     expect(store.checkedIn, isFalse);
     expect(store.homeActionLabel(), '开始练习');
+    expect(store.progressRemainderLine(), contains('还没看'));
+    expect(store.progressRemainderLine(), contains('还没用'));
     expect(store.progressRemainderLine(), contains('还差'));
 
     for (final id in plan.newWordIds) {
@@ -576,7 +578,7 @@ void main() {
     expect(store.practiceRounds, targetPracticeRounds);
     expect(store.dialogueDone, isTrue);
     expect(store.checkedIn, isTrue);
-    expect(store.progressRemainderLine(), '今天练完了');
+    expect(store.progressRemainderLine(), '今日练习完成');
     expect(store.homeActionLabel(), '回看练习');
 
     store.markWordUsed(first);

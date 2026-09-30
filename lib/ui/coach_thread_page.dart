@@ -8,7 +8,7 @@ import 'english_app.dart';
 import 'theme.dart';
 import 'thinking_panel.dart';
 
-/// Single coach chat for the day: 懂了 + 用过 + rounds, no stage switching.
+/// Single coach chat for the day: 看过了 + 用过 + rounds, no stage switching.
 class CoachThreadPage extends StatefulWidget {
   const CoachThreadPage({super.key, this.readOnly = false});
 
@@ -39,7 +39,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           _local.add(
             const _Bubble(
               role: _BubbleRole.coach,
-              text: '今天的词在首页词卡上。先点「懂了」看一眼，再回来在对话里用上——聊几轮就行。',
+              text: '今天的词在首页。看一眼，再跟教练聊几句就行。',
             ),
           );
         });
@@ -114,7 +114,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                     ),
                 if (!model.hasDeepSeekKey && !widget.readOnly) ...[
                   const SizedBox(height: 8),
-                  _keyCta('跟教练对话需要 DeepSeek 密钥。可先回首页词卡点「懂了」。'),
+                  _keyCta('跟教练对话需要 DeepSeek 密钥。可先回首页词卡点一下「看过了」。'),
                 ],
                 if (_status != null)
                   Padding(
@@ -243,7 +243,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     );
   }
 
-  /// Compact 懂了 actions for words not yet acknowledged (no card wall).
+  /// Compact 看过了 actions for words not yet acknowledged (no card wall).
   Widget _understoodChips(AppModel model, LessonStore store) {
     final plan = store.requiredTodayPlan;
     final pending = [
@@ -265,7 +265,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
             return ActionChip(
               avatar: const Icon(Icons.visibility_outlined, size: 16),
               label: Text(
-                '$en · 懂了',
+                '$en · 看过了',
                 style: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
