@@ -209,33 +209,45 @@ class WordCardPage extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: word == null
             ? const SizedBox.shrink()
-            : AppCard(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      word.en,
-                      style: const TextStyle(
-                        fontSize: 32,
-                        fontWeight: FontWeight.w800,
-                        color: ink,
-                      ),
+            : Align(
+                alignment: Alignment.topCenter,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: AppCard(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          word.en,
+                          style: const TextStyle(
+                            fontSize: 32,
+                            fontWeight: FontWeight.w800,
+                            color: ink,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(word.cn, style: const TextStyle(fontSize: 20)),
+                        Text(
+                          posLabelZh(word.pos),
+                          style: const TextStyle(color: muted),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          next == null
+                              ? '还没排进某一天'
+                              : '下一次 ${store.formatDay(next)}',
+                          style: const TextStyle(color: muted),
+                        ),
+                        if (fresh) ...[
+                          const SizedBox(height: 12),
+                          const Text(
+                            '从明天开始练',
+                            style: TextStyle(color: pine),
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(word.cn, style: const TextStyle(fontSize: 20)),
-                    Text(posLabelZh(word.pos), style: const TextStyle(color: muted)),
-                    const SizedBox(height: 12),
-                    Text(
-                      next == null
-                          ? '还没排进某一天'
-                          : '下一次 ${store.formatDay(next)}',
-                      style: const TextStyle(color: muted),
-                    ),
-                    if (fresh) ...[
-                      const SizedBox(height: 12),
-                      const Text('从明天开始练', style: TextStyle(color: pine)),
-                    ],
-                  ],
+                  ),
                 ),
               ),
       ),
