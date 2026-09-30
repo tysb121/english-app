@@ -7,6 +7,7 @@ import '../engine/reasoning_effort.dart';
 import 'english_app.dart';
 import 'theme.dart';
 import 'upgrade_nudge.dart';
+import '../update/update_ui.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, this.gate = false});
@@ -247,6 +248,17 @@ class _SettingsPageState extends State<SettingsPage> {
             const Text(
               '关闭则不展示思考过程。中/高会调用 DeepSeek thinking（medium 按接口映射为 high）。',
               style: TextStyle(color: ink, fontSize: 12),
+            ),
+          ],
+          if (!widget.gate) ...[
+            const SizedBox(height: 16),
+            const SectionTitle('关于', icon: Icons.info_outline_rounded),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('检查更新'),
+              subtitle: const Text('从 GitHub Releases 获取最新安装包'),
+              trailing: const Icon(Icons.system_update_alt_rounded),
+              onTap: () => runManualUpdateCheck(context),
             ),
           ],
           const SizedBox(height: 28),

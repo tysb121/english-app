@@ -7,6 +7,7 @@ import 'settings_page.dart';
 import 'theme.dart';
 import 'today_page.dart';
 import 'words_page.dart';
+import '../update/update_ui.dart';
 
 class EnglishApp extends StatelessWidget {
   const EnglishApp({super.key, required this.model});
@@ -75,6 +76,20 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+  bool _softUpdateScheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_softUpdateScheduled) return;
+    _softUpdateScheduled = true;
+    // Non-blocking soft check once the home shell is live.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      // Fire-and-forget; update_ui never throws to caller.
+      runSoftUpdateCheck(context);
+    });
+  }
 
   static const _pages = [
     TodayPage(),

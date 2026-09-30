@@ -40,6 +40,9 @@ dependencies:
   sqflite_common_ffi: ^2.4.3
   path: ^1.9.1
   sqlite3_flutter_libs: ^0.6.0+eol
+  package_info_plus: ^9.0.1
+  open_filex: ^4.7.0
+  shared_preferences: ^2.5.5
 
 dev_dependencies:
   flutter_test:

@@ -49,3 +49,9 @@ app.*.map.json
 
 # Large sourced dict dumps used only by build scripts
 /tool/vendor/
+
+# Release signing (never commit)
+*.jks
+*.keystore
+key.properties
+**/key.properties
