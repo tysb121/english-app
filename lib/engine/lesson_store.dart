@@ -240,6 +240,7 @@ class LessonStore {
 
   int dailyWords = 5;
   String level = '简单工作对话';
+  bool levelChosen = false;
   String goal = '职场';
   String tone = '简洁';
   bool sceneInFlight = false;
@@ -720,19 +721,24 @@ class LessonStore {
     return lastCorrect >= vocabPassThreshold(ids.length);
   }
 
+  bool vocabSeen(String wordId) {
+    final attempts = _attempts[_key(today)] ?? [];
+    return attempts.any((item) => item.wordId == wordId);
+  }
+
   String homeActionLabel() {
     final plan = ensureTodayPlan();
-    if (checkedIn) return '看今天的笔记';
+    if (checkedIn) return '回看今天';
     if (!vocabThresholdMet) {
       final attempts = _attempts[_key(plan.date)] ?? [];
-      if (attempts.isEmpty) return '开始认词';
+      if (attempts.isEmpty) return '开始今天';
       return '继续认词';
     }
     if (sceneInFlight && plan.scene == null) return '正在写今天的场景';
-    if (!plan.dialogueDone && plan.scene == null) return '开始对话';
     if (!plan.dialogueDone) return '继续对话';
-    if (!quizGate) return '开始考核';
-    return '看今天的笔记';
+    if (!quizGate) return '继续考核';
+    if (plan.errorWordIds.isNotEmpty) return '还有错词';
+    return '回看今天';
   }
 
   List<StudyNote> noteDrafts() {
@@ -846,6 +852,7 @@ class LessonStore {
       'installId': installId,
       'dailyWords': dailyWords,
       'level': level,
+      'levelChosen': levelChosen,
       'goal': goal,
       'tone': tone,
       'userWords': [
@@ -971,6 +978,12 @@ class LessonStore {
     const tones = {'简洁', '朋友', '老师'};
     if (levels.contains(json['level'])) {
       level = normalizeLevel(json['level'] as String);
+    }
+    if (json['levelChosen'] == true) {
+      levelChosen = true;
+    } else if (levels.contains(json['level'])) {
+      // Returning users who already had a level saved are treated as chosen.
+      levelChosen = true;
     }
     if (goals.contains(json['goal'])) goal = json['goal'] as String;
     if (tones.contains(json['tone'])) tone = json['tone'] as String;

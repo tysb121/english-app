@@ -26,7 +26,7 @@ ThemeData buildTheme() {
       style: FilledButton.styleFrom(
         backgroundColor: pine,
         foregroundColor: Colors.white,
-        minimumSize: const Size.fromHeight(52),
+        minimumSize: const Size(64, 52),
         textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
       ),
     ),
