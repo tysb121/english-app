@@ -8,7 +8,17 @@ class LocalProgress {
   final File file;
 
   static Future<LocalProgress> open() async {
-    final dir = await getApplicationDocumentsDirectory();
+    Directory dir;
+    try {
+      dir = await getApplicationDocumentsDirectory();
+    } on Object {
+      // Linux smoke: path_provider may fail without XDG app dirs.
+      final home = Platform.environment['HOME'] ?? '/tmp';
+      dir = Directory('$home/.local/share/english_app');
+    }
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
     return LocalProgress(
       File('${dir.path}${Platform.pathSeparator}english_progress.json'),
     );

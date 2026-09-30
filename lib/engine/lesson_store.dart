@@ -15,6 +15,31 @@ int vocabPassThreshold(int newWordCount) => (newWordCount * 8 + 9) ~/ 10;
 
 String normalizeAnswer(String value) => value.trim().toLowerCase();
 
+SeedBand bandForLevel(String level) {
+  switch (level) {
+    case '新手':
+    case '日常交流': // legacy label reads as beginner
+      return SeedBand.beginner;
+    case '更长的表达':
+      return SeedBand.longer;
+    case '简单工作对话':
+    default:
+      return SeedBand.workplace;
+  }
+}
+
+String normalizeLevel(String level) {
+  if (level == '日常交流') return '新手';
+  return level;
+}
+
+List<SeedBand> bandsFrom(SeedBand start) {
+  const order = [SeedBand.beginner, SeedBand.workplace, SeedBand.longer];
+  final index = order.indexOf(start);
+  if (index < 0) return order;
+  return order.sublist(index);
+}
+
 String createInstallId() {
   const alphabet =
       'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-';
@@ -215,6 +240,7 @@ class LessonStore {
 
   int dailyWords = 5;
   String level = '简单工作对话';
+  bool levelChosen = false;
   String goal = '职场';
   String tone = '简洁';
   bool sceneInFlight = false;
@@ -246,10 +272,15 @@ class LessonStore {
     }
 
     takeFrom(true);
-    for (final seed in _seeds) {
+    final bands = bandsFrom(bandForLevel(level));
+    for (final band in bands) {
       if (picked.length >= dailyWords) break;
-      if (used.contains(seed.id) || picked.contains(seed.id)) continue;
-      picked.add(seed.id);
+      for (final seed in _seeds) {
+        if (picked.length >= dailyWords) break;
+        if (seed.band != band) continue;
+        if (used.contains(seed.id) || picked.contains(seed.id)) continue;
+        picked.add(seed.id);
+      }
     }
     final reviews = <String>[];
     for (final entry in _reviews.entries) {
@@ -690,19 +721,24 @@ class LessonStore {
     return lastCorrect >= vocabPassThreshold(ids.length);
   }
 
+  bool vocabSeen(String wordId) {
+    final attempts = _attempts[_key(today)] ?? [];
+    return attempts.any((item) => item.wordId == wordId);
+  }
+
   String homeActionLabel() {
     final plan = ensureTodayPlan();
-    if (checkedIn) return '看今天的笔记';
+    if (checkedIn) return '回看今天';
     if (!vocabThresholdMet) {
       final attempts = _attempts[_key(plan.date)] ?? [];
-      if (attempts.isEmpty) return '开始认词';
+      if (attempts.isEmpty) return '开始今天';
       return '继续认词';
     }
     if (sceneInFlight && plan.scene == null) return '正在写今天的场景';
-    if (!plan.dialogueDone && plan.scene == null) return '开始对话';
     if (!plan.dialogueDone) return '继续对话';
-    if (!quizGate) return '开始考核';
-    return '看今天的笔记';
+    if (!quizGate) return '继续考核';
+    if (plan.errorWordIds.isNotEmpty) return '还有错词';
+    return '回看今天';
   }
 
   List<StudyNote> noteDrafts() {
@@ -816,6 +852,7 @@ class LessonStore {
       'installId': installId,
       'dailyWords': dailyWords,
       'level': level,
+      'levelChosen': levelChosen,
       'goal': goal,
       'tone': tone,
       'userWords': [
@@ -936,10 +973,18 @@ class LessonStore {
     if (wordCounts.contains(json['dailyWords'])) {
       dailyWords = json['dailyWords'] as int;
     }
-    const levels = {'简单工作对话', '日常交流', '更长的表达'};
+    const levels = {'新手', '简单工作对话', '日常交流', '更长的表达'};
     const goals = {'职场', '日常', '考试', '都要'};
     const tones = {'简洁', '朋友', '老师'};
-    if (levels.contains(json['level'])) level = json['level'] as String;
+    if (levels.contains(json['level'])) {
+      level = normalizeLevel(json['level'] as String);
+    }
+    if (json['levelChosen'] == true) {
+      levelChosen = true;
+    } else if (levels.contains(json['level'])) {
+      // Returning users who already had a level saved are treated as chosen.
+      levelChosen = true;
+    }
     if (goals.contains(json['goal'])) goal = json['goal'] as String;
     if (tones.contains(json['tone'])) tone = json['tone'] as String;
 

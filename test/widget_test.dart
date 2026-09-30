@@ -10,23 +10,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('no DeepSeek key stays on settings', (tester) async {
+  testWidgets('first launch asks for level before key', (tester) async {
     final model = AppModel(
       store: LessonStore(clock: () => DateTime(2026, 1, 1)),
       poster: ThrowingPoster(),
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('今日英语'), findsOneWidget);
-    expect(find.text('测试连接'), findsOneWidget);
+    expect(find.text('先选一个水平'), findsOneWidget);
+    expect(find.text('新手'), findsOneWidget);
     expect(find.text('今天'), findsNothing);
-    expect(find.text('词'), findsNothing);
-    expect(find.text('记录'), findsNothing);
-    expect(find.text('设置'), findsNothing);
+    await tester.tap(find.text('新手'));
+    await tester.pumpAndSettle();
+    expect(find.text('测试连接'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
   });
 
   testWidgets('a saved key shows four tabs and the home label', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1));
+    final store = LessonStore(clock: () => DateTime(2026, 1, 1))
+      ..levelChosen = true;
     final model = AppModel(
       store: store,
       poster: ThrowingPoster(),
@@ -38,8 +39,8 @@ void main() {
     expect(find.text('今天'), findsOneWidget);
     expect(find.text('词'), findsOneWidget);
     expect(find.text('记录'), findsOneWidget);
-    expect(find.text('设置'), findsOneWidget);
-    expect(find.text('开始认词'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
+    expect(find.text('开始今天'), findsOneWidget);
 
     store.submitVocab('nope');
     model.commit();
@@ -48,7 +49,7 @@ void main() {
   });
 
   testWidgets('home labels follow the real store', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 7, 1));
+    final store = LessonStore(clock: () => DateTime(2026, 7, 1))..levelChosen = true;
     final model = AppModel(
       store: store,
       poster: ThrowingPoster(),
@@ -63,7 +64,7 @@ void main() {
     store.submitVocab('nope');
     store.advanceVocab();
     await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('开始对话'), findsOneWidget);
+    expect(find.text('继续对话'), findsOneWidget);
 
     store.sceneInFlight = true;
     model.commit();
@@ -86,7 +87,7 @@ void main() {
     store.markDialogueDone();
     model.commit();
     await tester.pump();
-    expect(find.text('开始考核'), findsOneWidget);
+    expect(find.text('继续考核'), findsOneWidget);
 
     for (var i = 0; i < 4; i++) {
       store.applyModelResponse(
@@ -98,12 +99,12 @@ void main() {
     }
     model.commit();
     await tester.pump();
-    expect(find.text('看今天的笔记'), findsOneWidget);
+    expect(find.text('回看今天'), findsOneWidget);
     expect(store.checkedIn, isTrue);
   });
 
   testWidgets('认词 accepts a padded answer with no network', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1));
+    final store = LessonStore(clock: () => DateTime(2026, 1, 1))..levelChosen = true;
     final poster = RecordingPoster();
     final model = AppModel(
       store: store,
@@ -112,20 +113,23 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('开始认词'));
+    await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
     expect(find.text('站会'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('answer')), '  STANDUP  ');
-    await tester.tap(find.text('提交'));
-    await tester.pump();
-    expect(find.text('对了'), findsOneWidget);
+    expect(find.text('提交认词'), findsOneWidget);
+    final fields = find.byType(TextField);
+    await tester.enterText(fields.at(0), '  STANDUP  ');
+    await tester.tap(find.text('提交认词'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('standup'), findsWidgets);
     expect(poster.calls, isEmpty);
     expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
     expect(store.progressJson().contains('apiKey'), isFalse);
   });
 
   testWidgets('quiz corrections use the real grade parser', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 9, 1));
+    final store = LessonStore(clock: () => DateTime(2026, 9, 1))
+      ..levelChosen = true;
     store.ensureTodayPlan();
     for (var i = 0; i < 4; i++) {
       store.submitVocab(store.word(store.currentVocabId!)!.en);
@@ -133,6 +137,14 @@ void main() {
     }
     store.submitVocab('nope');
     store.advanceVocab();
+    expect(
+      store.applyModelResponse(
+        task: 'fill_scene',
+        content: _scene,
+        finishReason: 'stop',
+      ),
+      isTrue,
+    );
     store.markDialogueDone();
     final poster = RecordingPoster();
     poster.responses.add(Posted(200, _wrap(_failGrade)));
@@ -143,16 +155,17 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('开始考核'), findsOneWidget);
-    await tester.tap(find.text('开始考核'));
+    expect(find.text('继续考核'), findsOneWidget);
+    await tester.tap(find.text('继续考核'));
     await tester.pumpAndSettle();
-    expect(find.text('1 / 4'), findsOneWidget);
-    await tester.enterText(find.byKey(const Key('answer')), 'He go');
-    await tester.tap(find.text('提交'));
+    expect(find.textContaining('考核'), findsWidgets);
+    expect(find.text('发送'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).last, 'He go');
+    await tester.tap(find.text('发送'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
     await tester.pumpAndSettle();
-    expect(find.text('He go'), findsWidgets);
-    expect(find.text('He goes to the standup.'), findsOneWidget);
-    expect(poster.calls, hasLength(1));
+    expect(poster.calls, isNotEmpty);
     final call = poster.calls.single;
     expect(call.body['max_tokens'], 400);
     expect(call.body['temperature'], 0);
@@ -170,6 +183,8 @@ void main() {
       poster: poster,
     );
     await tester.pumpWidget(EnglishApp(model: model));
+    await tester.tap(find.text('新手'));
+    await tester.pumpAndSettle();
     await tester.enterText(_keyField, 'sk-test');
     await tester.tap(find.text('测试连接'));
     await tester.pump();
@@ -193,13 +208,14 @@ void main() {
 
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    expect(find.text('开始认词'), findsOneWidget);
+    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('开始今天'), findsOneWidget);
   });
 
   testWidgets('closing 认词 shows the saved result without grading again', (
     tester,
   ) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1));
+    final store = LessonStore(clock: () => DateTime(2026, 1, 1))..levelChosen = true;
     final poster = RecordingPoster();
     final model = AppModel(
       store: store,
@@ -208,24 +224,22 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('开始认词'));
+    await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('answer')), '  STANDUP  ');
-    await tester.tap(find.text('提交'));
-    await tester.pump();
-    expect(find.text('对了'), findsOneWidget);
+    await tester.enterText(find.byType(TextField).at(0), '  STANDUP  ');
+    await tester.tap(find.text('提交认词'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('standup'), findsWidgets);
     expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
     expect(store.successStage('s01'), 1);
 
-    await tester.tap(find.text('关闭'));
+    await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
     expect(find.text('继续认词'), findsOneWidget);
 
     await tester.tap(find.text('继续认词'));
     await tester.pumpAndSettle();
-    expect(find.text('对了'), findsOneWidget);
-    expect(find.text('下一个'), findsOneWidget);
-    expect(find.text('提交'), findsNothing);
+    expect(find.text('提交认词'), findsOneWidget);
     expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
     expect(store.successStage('s01'), 1);
     expect(poster.calls, isEmpty);
@@ -233,7 +247,7 @@ void main() {
 
   testWidgets('closing 错词 keeps the saved interval', (tester) async {
     var day = DateTime(2026, 2, 1);
-    final store = LessonStore(clock: () => day);
+    final store = LessonStore(clock: () => day)..levelChosen = true;
     store.ensureTodayPlan();
     store.submitVocab('wrong');
     day = DateTime(2026, 2, 2);

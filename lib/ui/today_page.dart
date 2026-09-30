@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/app_model.dart';
 import '../engine/lesson_store.dart';
 import 'english_app.dart';
+import 'coach_thread_page.dart';
 import 'practice_page.dart';
 import 'theme.dart';
 
@@ -134,11 +135,12 @@ class _TodayPageState extends State<TodayPage> {
   Widget _card(LessonStore store, String id) {
     final word = store.word(id);
     if (word == null) return const SizedBox.shrink();
+    final known = store.vocabSeen(id);
     return Card(
       color: Colors.white,
       child: ListTile(
-        title: Text(word.en),
-        subtitle: Text('${word.cn} · ${word.pos}'),
+        title: Text(known ? word.en : word.cn),
+        subtitle: Text(known ? '${word.cn} · ${word.pos}' : word.pos),
       ),
     );
   }
@@ -166,22 +168,21 @@ class _TodayPageState extends State<TodayPage> {
 
   void _openPrimary(BuildContext context, AppModel model) {
     final label = model.store.homeActionLabel();
-    if (label == '看今天的笔记') {
-      setState(() {
-        _drafts = model.store.notesDismissed && model.store.savedNotes.isNotEmpty
-            ? [...model.store.savedNotes]
-            : [...model.store.noteDrafts()];
-        _showNotes = true;
-      });
+    if (label == '回看今天' && model.store.checkedIn) {
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const CoachThreadPage(readOnly: true),
+        ),
+      );
       return;
     }
-    final kind = switch (label) {
-      '开始对话' || '继续对话' || '正在写今天的场景' => PracticeKind.dialogue,
-      '开始考核' => PracticeKind.quiz,
-      _ => PracticeKind.vocab,
-    };
-    _open(context, kind);
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const CoachThreadPage(),
+      ),
+    );
   }
+
 
   void _open(BuildContext context, PracticeKind kind) {
     Navigator.of(context).push(

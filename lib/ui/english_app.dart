@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app/app_model.dart';
+import 'level_page.dart';
 import 'records_page.dart';
 import 'settings_page.dart';
 import 'theme.dart';
@@ -43,6 +44,7 @@ class RootPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
+    if (!model.store.levelChosen) return const LevelPage();
     if (!model.unlocked) return const SettingsPage(gate: true);
     return const HomeShell();
   }
@@ -77,8 +79,8 @@ class _HomeShellState extends State<HomeShell> {
             label: '记录',
           ),
           NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            label: '设置',
+            icon: Icon(Icons.person_outline),
+            label: '我的',
           ),
         ],
       ),

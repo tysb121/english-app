@@ -112,3 +112,70 @@ ApiCall tokenHubTranslation({
     },
   );
 }
+
+const coachSystemPrompt =
+    '你是「今日英语」里的英语教练。用简短中文带用户练英文，一次只推进一小步。'
+    '用户要练的句子用英文。不宣布打卡，不安排复习日期，不声称进度已经记下。';
+
+const checkpointSystemPrompt =
+    '你在为英语教练整理更早的对话。只输出检查点正文，用简体中文，按下面的小节顺序，空节写「无」。\n'
+    '\n'
+    '## 正在练什么\n'
+    '## 已经练过的词和句子\n'
+    '## 停在哪里\n'
+    '## 还没做完的事\n'
+    '## 需要记住的约束\n'
+    '\n'
+    '合并已有检查点里仍然成立的事实，丢掉过时的。不要调用工具，不要写小节以外的话。';
+
+ApiCall deepSeekPlainChat({
+  required String apiKey,
+  required List<Map<String, String>> messages,
+  String baseUrl = 'https://api.deepseek.com',
+  String model = 'deepseek-flash',
+  String? userId,
+  double temperature = 0.4,
+  int maxTokens = 800,
+}) {
+  final root = baseUrl.endsWith('/')
+      ? baseUrl.substring(0, baseUrl.length - 1)
+      : baseUrl;
+  return ApiCall(
+    uri: Uri.parse('$root$deepSeekChatPath'),
+    headers: {
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
+    },
+    body: {
+      'model': model,
+      'messages': messages,
+      'stream': false,
+      'temperature': temperature,
+      'max_tokens': maxTokens,
+      'thinking': {'type': 'disabled'},
+      'reasoning_effort': 'none',
+      if (userId != null && userId.isNotEmpty) 'user_id': userId,
+    },
+  );
+}
+
+ApiCall deepSeekSummarize({
+  required String apiKey,
+  required String source,
+  String baseUrl = 'https://api.deepseek.com',
+  String model = 'deepseek-flash',
+  String? userId,
+}) {
+  return deepSeekPlainChat(
+    apiKey: apiKey,
+    baseUrl: baseUrl,
+    model: model,
+    userId: userId,
+    temperature: 0,
+    maxTokens: 800,
+    messages: [
+      {'role': 'system', 'content': checkpointSystemPrompt},
+      {'role': 'user', 'content': source},
+    ],
+  );
+}
