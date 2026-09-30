@@ -25,7 +25,7 @@ void main() {
     expect(done?.finishReason, 'stop');
   });
 
-  test('parseSseBody folds multi-line SSE', () {
+  test('parseSseBody folds multi-line SSE with usage', () {
     const raw = '''
 data: {"choices":[{"delta":{"reasoning_content":"A"}}]}
 
@@ -33,12 +33,15 @@ data: {"choices":[{"delta":{"reasoning_content":"B","content":"Hi"}}]}
 
 data: {"choices":[{"delta":{},"finish_reason":"stop"}]}
 
+data: {"choices":[],"usage":{"total_tokens":42}}
+
 data: [DONE]
 ''';
     final folded = foldSseEvents(parseSseBody(raw));
     expect(folded.reasoning, 'AB');
     expect(folded.content, 'Hi');
     expect(folded.finishReason, 'stop');
+    expect(folded.totalTokens, 42);
   });
 
   test('deepSeekThinkingFields maps UI effort to API', () {
@@ -53,7 +56,7 @@ data: [DONE]
     expect(deepSeekThinkingFields('high')['reasoning_effort'], 'high');
   });
 
-  test('plain chat stream request enables stream flag', () {
+  test('plain chat stream request enables stream flag and usage', () {
     final call = deepSeekPlainChat(
       apiKey: 'k',
       messages: [
@@ -63,9 +66,16 @@ data: [DONE]
       reasoningEffort: 'high',
     );
     expect(call.body['stream'], isTrue);
+    expect(call.body['stream_options'], {'include_usage': true});
     expect(call.body['thinking'], {'type': 'enabled'});
     expect(call.body['reasoning_effort'], 'high');
     expect(call.body.containsKey('response_format'), isFalse);
+  });
+
+  test('coach system prompt refuses unrelated work', () {
+    expect(coachSystemPrompt.contains('只做一件事'), isTrue);
+    expect(coachSystemPrompt.contains('礼貌拒绝'), isTrue);
+    expect(checkpointSystemPrompt.contains('今日英语'), isTrue);
   });
 
   test('ChatThread streams reasoning into assistant message', () async {
@@ -101,6 +111,32 @@ data: [DONE]
     expect(updates, isNotEmpty);
   });
 
+  test('ChatThread records usage and elapsed on stream finish', () async {
+    var ids = 0;
+    final thread = ChatThread(idFactory: () => 'u${++ids}');
+    const sse = '''
+data: {"choices":[{"delta":{"content":"练一句 OK。"},"finish_reason":"stop"}]}
+
+data: {"choices":[],"usage":{"total_tokens":17}}
+
+data: [DONE]
+''';
+    final poster = ScriptPoster([const Posted(200, sse)]);
+    final err = await thread.send(
+      text: 'hi',
+      poster: poster,
+      apiKey: 'k',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'm',
+      installId: 'id',
+    );
+    expect(err, isNull);
+    expect(poster.calls.single.body['stream_options'], {'include_usage': true});
+    expect(thread.messages.last.usageTokens, 17);
+    expect(thread.messages.last.elapsedMs, isNotNull);
+    expect(thread.messages.last.finishedAt, isNotNull);
+  });
+
   testWidgets('ThinkingPanel shows collapsible reasoning', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
@@ -113,6 +149,25 @@ data: [DONE]
     await tester.tap(find.text('思考过程'));
     await tester.pumpAndSettle();
     expect(find.text('逐步推理'), findsOneWidget);
+  });
+
+  testWidgets('Reply footer shows usage and copy', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CoachAnswerBubble(
+            content: '练一句 sounds good。',
+            usageTokens: 21,
+            elapsedMs: 1500,
+            finishedAt: DateTime(2026, 9, 30, 17, 45),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('用量 21 tok'), findsOneWidget);
+    expect(find.textContaining('1.5s'), findsOneWidget);
+    expect(find.textContaining('17:45'), findsOneWidget);
+    expect(find.byIcon(Icons.copy_outlined), findsOneWidget);
   });
 }
 

@@ -72,6 +72,9 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                       content: model.chat!.messages[i].content,
                       reasoning: model.chat!.messages[i].reasoning,
                       streaming: model.chat!.streamingIndex == i,
+                      usageTokens: model.chat!.messages[i].usageTokens,
+                      elapsedMs: model.chat!.messages[i].elapsedMs,
+                      finishedAt: model.chat!.messages[i].finishedAt,
                     ),
                 ..._stageBody(model, store, stage, sceneLoading: sceneLoading),
                 if (_status != null)
@@ -592,7 +595,11 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   bool _allowsInput(_Stage stage) =>
-      stage == _Stage.dialogue || stage == _Stage.quiz;
+      stage == _Stage.dialogue ||
+      stage == _Stage.quiz ||
+      stage == _Stage.errors ||
+      stage == _Stage.notes ||
+      stage == _Stage.done;
 
   Widget _bubble(_Bubble bubble) {
     return CoachAnswerBubble(

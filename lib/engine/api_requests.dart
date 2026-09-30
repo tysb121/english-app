@@ -116,11 +116,16 @@ ApiCall tokenHubTranslation({
 }
 
 const coachSystemPrompt =
-    '你是「今日英语」里的英语教练。用简短中文带用户练英文，一次只推进一小步。'
-    '用户要练的句子用英文。不宣布打卡，不安排复习日期，不声称进度已经记下。';
+    '你是「今日英语」应用里的英语教练，只做一件事：帮用户练英语。\n'
+    '身份边界：你不是通用助手、不是编程/写作/百科/生活顾问。与练英语无关的请求，用一两句中文礼貌拒绝，'
+    '并立刻把话题带回今天的词、句子、对话或考核。\n'
+    '教学方式：用简短中文带练，一次只推进一小步；用户要练的句子用英文。'
+    '可以纠正语法和用法，给一句改写和一句原因。\n'
+    '不要宣布打卡，不要安排复习日期，不要声称进度已经记下，不要调用工具，不要输出 JSON。';
 
 const checkpointSystemPrompt =
-    '你在为英语教练整理更早的对话。只输出检查点正文，用简体中文，按下面的小节顺序，空节写「无」。\n'
+    '你在为「今日英语」英语教练整理更早的对话。只整理与练英语有关的事实。'
+    '只输出检查点正文，用简体中文，按下面的小节顺序，空节写「无」。\n'
     '\n'
     '## 正在练什么\n'
     '## 已经练过的词和句子\n'
@@ -128,7 +133,7 @@ const checkpointSystemPrompt =
     '## 还没做完的事\n'
     '## 需要记住的约束\n'
     '\n'
-    '合并已有检查点里仍然成立的事实，丢掉过时的。不要调用工具，不要写小节以外的话。';
+    '合并已有检查点里仍然成立的事实，丢掉过时的。不要调用工具，不要写小节以外的话，不要输出 JSON。';
 
 ApiCall deepSeekPlainChat({
   required String apiKey,
@@ -162,7 +167,7 @@ ApiCall deepSeekPlainChat({
       'temperature': temperature,
       'max_tokens': tokens,
       ...thinking,
-      if (stream) 'stream_options': {'include_usage': false},
+      if (stream) 'stream_options': {'include_usage': true},
       if (userId != null && userId.isNotEmpty) 'user_id': userId,
     },
   );

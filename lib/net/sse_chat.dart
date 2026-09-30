@@ -5,6 +5,7 @@ class SseChatEvent {
   final String? reasoningDelta;
   final String? contentDelta;
   final String? finishReason;
+  final int? totalTokens;
   final int? httpStatus;
   final String? errorMessage;
 
@@ -12,12 +13,21 @@ class SseChatEvent {
     this.reasoningDelta,
     this.contentDelta,
     this.finishReason,
+    this.totalTokens,
     this.httpStatus,
     this.errorMessage,
   });
 
-  bool get isError => httpStatus != null || errorMessage != null;
+  bool get isError => httpStatus != null || (errorMessage != null && errorMessage != 'done');
   bool get isDone => finishReason != null || errorMessage == 'done';
+}
+
+int? _usageTotal(Object? usage) {
+  if (usage is! Map) return null;
+  final total = usage['total_tokens'];
+  if (total is int) return total;
+  if (total is num) return total.toInt();
+  return null;
 }
 
 /// Parse one `data:` payload (JSON object or `[DONE]`).
@@ -30,13 +40,16 @@ SseChatEvent? parseSseDataPayload(String payload) {
   try {
     final decoded = jsonDecode(trimmed);
     if (decoded is! Map) return null;
+    final usageTokens = _usageTotal(decoded['usage']);
     final choices = decoded['choices'];
     if (choices is! List || choices.isEmpty) {
       // usage-only chunk with empty choices
-      return const SseChatEvent();
+      return SseChatEvent(totalTokens: usageTokens);
     }
     final first = choices.first;
-    if (first is! Map) return null;
+    if (first is! Map) {
+      return SseChatEvent(totalTokens: usageTokens);
+    }
     final delta = first['delta'];
     final message = first['message'];
     String? reasoning;
@@ -57,6 +70,7 @@ SseChatEvent? parseSseDataPayload(String payload) {
       reasoningDelta: reasoning,
       contentDelta: content,
       finishReason: finish is String ? finish : null,
+      totalTokens: usageTokens,
     );
   } on FormatException {
     return null;
@@ -86,30 +100,35 @@ class StreamedChatResult {
   final String content;
   final String reasoning;
   final String? finishReason;
+  final int? totalTokens;
   final int status;
 
   const StreamedChatResult({
     required this.content,
     required this.reasoning,
     this.finishReason,
+    this.totalTokens,
     this.status = 200,
   });
 }
 
-/// Fold SSE events into final content + reasoning.
+/// Fold SSE events into final content + reasoning + usage.
 StreamedChatResult foldSseEvents(Iterable<SseChatEvent> events, {int status = 200}) {
   final content = StringBuffer();
   final reasoning = StringBuffer();
   String? finish;
+  int? tokens;
   for (final event in events) {
     if (event.reasoningDelta != null) reasoning.write(event.reasoningDelta);
     if (event.contentDelta != null) content.write(event.contentDelta);
     if (event.finishReason != null) finish = event.finishReason;
+    if (event.totalTokens != null) tokens = event.totalTokens;
   }
   return StreamedChatResult(
     content: content.toString(),
     reasoning: reasoning.toString(),
     finishReason: finish,
+    totalTokens: tokens,
     status: status,
   );
 }

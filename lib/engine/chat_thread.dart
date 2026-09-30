@@ -212,8 +212,10 @@ class ChatThread {
     var content = '';
     var reasoning = '';
     String? finish;
+    int? usageTokens;
     var sawError = false;
     String? errText;
+    final started = DateTime.now();
 
     try {
       await for (final event in openChatStream(poster, call)) {
@@ -232,9 +234,13 @@ class ChatThread {
         if (event.finishReason != null) {
           finish = event.finishReason;
         }
+        if (event.totalTokens != null) {
+          usageTokens = event.totalTokens;
+        }
         messages[streamingIndex!] = assistant.copyWith(
           content: content,
           reasoning: reasoning,
+          usageTokens: usageTokens,
         );
         onUpdate?.call();
       }
@@ -242,6 +248,8 @@ class ChatThread {
       sawError = true;
       errText = '服务暂时不可用';
     }
+
+    final elapsedMs = DateTime.now().difference(started).inMilliseconds;
 
     if (sawError || content.trim().isEmpty) {
       // Remove empty / partial assistant on hard failure; keep partial if any content.
@@ -260,6 +268,9 @@ class ChatThread {
     messages[streamingIndex!] = assistant.copyWith(
       content: content.trim(),
       reasoning: reasoning.trim(),
+      usageTokens: usageTokens,
+      elapsedMs: elapsedMs,
+      finishedAt: DateTime.now(),
     );
     streamingIndex = null;
     if (finish != null && finish != 'stop' && content.trim().isEmpty) {
