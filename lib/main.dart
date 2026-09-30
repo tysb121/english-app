@@ -25,23 +25,22 @@ Future<void> main() async {
 
   // Keep only user + hydrated book lexemes in RAM (not the full ~5k).
   final store = LessonStore();
-  store.untaughtIdPicker = ({
-    required String level,
-    required int limit,
-    required Set<String> exclude,
-  }) {
-    return coachDb.pickUntaughtIds(
-      level: level,
-      limit: limit,
-      exclude: exclude,
-    );
-  };
-  store.untaughtCountFn = ({
-    required String level,
-    required Set<String> exclude,
-  }) {
-    return coachDb.untaughtCount(level: level, exclude: exclude);
-  };
+  store.untaughtIdPicker =
+      ({
+        required String level,
+        required int limit,
+        required Set<String> exclude,
+      }) {
+        return coachDb.pickUntaughtIds(
+          level: level,
+          limit: limit,
+          exclude: exclude,
+        );
+      };
+  store.untaughtCountFn =
+      ({required String level, required Set<String> exclude}) {
+        return coachDb.untaughtCount(level: level, exclude: exclude);
+      };
   store.bookWordsByIds = coachDb.wordsByIds;
 
   final shell = ProgressShell(store: store, chat: ChatThread());
@@ -85,9 +84,6 @@ Future<void> main() async {
     deepSeekKey: secrets.deepSeekKey,
     deepSeekBase: secrets.deepSeekBase,
     deepSeekModel: secrets.deepSeekModel,
-    tokenHubKey: secrets.tokenHubKey,
-    tokenHubBase: secrets.tokenHubBase,
-    tokenHubModel: secrets.tokenHubModel,
     unlocked: secrets.deepSeekKey.trim().isNotEmpty,
     persistProgress: (_) {
       // Debounce full SQLite rewrites on rapid vocab taps.

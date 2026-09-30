@@ -7,7 +7,7 @@
 这是一个 Flutter 安卓应用，屏幕名是「今日英语」。
 
 - [docs/目标.md](docs/目标.md)：产品目标。
-- [docs/能力设计.md](docs/能力设计.md)：第一版能力合同。DeepSeek `deepseek-flash` 负责场景、批改和讲解；TokenHub 的 `hy-mt2-plus` 负责整句参考译文。手机直接调用这两家，不设后端。验收在安卓手机上完成。
+- [docs/能力设计.md](docs/能力设计.md)：第一版能力合同。DeepSeek `deepseek-flash` 负责教练对话、场景、批改和讲解。手机直接调用，不设后端。验收在安卓手机上完成。
 - [docs/产品交互.md](docs/产品交互.md)：下一版的产品交互。启动、底栏、每日闭环、记录和设置以这份为准。
 - [docs/界面.md](docs/界面.md)：已经装上手机的表单版。
 - [docs/聊天规划.md](docs/聊天规划.md)：教练线程里的上下文压缩和发送。

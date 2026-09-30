@@ -48,14 +48,6 @@ ChatReply? parseChatReply(String raw) {
   }
 }
 
-bool plainTranslation(String text) {
-  final value = text.trim();
-  if (value.isEmpty || value.length > 400) return false;
-  if (value.contains('\n')) return false;
-  if (value.contains('不要额外解释')) return false;
-  return true;
-}
-
 String deepSeekStatusText(int status, {String? body}) {
   if (status == 401) return '密钥无效';
   if (status == 402) return '余额不足';

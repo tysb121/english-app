@@ -46,8 +46,9 @@ void main() {
     expect(find.textContaining('还没填写 DeepSeek 密钥'), findsOneWidget);
   });
 
-
-  testWidgets('我的 shows product level labels and tomorrow tip when frozen', (tester) async {
+  testWidgets('我的 shows product level labels and tomorrow tip when frozen', (
+    tester,
+  ) async {
     final store = fixtureStore(
       clock: () => DateTime(2026, 1, 1),
       levelChosen: true,
@@ -107,7 +108,10 @@ void main() {
   });
 
   testWidgets('home labels follow the real store', (tester) async {
-    final store = fixtureStore(clock: () => DateTime(2026, 7, 1), levelChosen: true);
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 7, 1),
+      levelChosen: true,
+    );
     final model = AppModel(
       store: store,
       poster: ThrowingPoster(),
@@ -140,8 +144,22 @@ void main() {
     expect(store.checkedIn, isTrue);
   });
 
-  testWidgets('coach chat shows word cards and 懂了 offline', (tester) async {
-    final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
+  testWidgets('home shows all today words; coach 懂了 chip offline', (
+    tester,
+  ) async {
+    final view = tester.view;
+    view.physicalSize = const Size(400, 960);
+    view.devicePixelRatio = 1.0;
+    addTearDown(view.resetPhysicalSize);
+    addTearDown(view.resetDevicePixelRatio);
+
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 1, 1),
+      levelChosen: true,
+    );
+    store.ensureTodayPlan();
+    final ids = store.requiredTodayPlan.newWordIds;
+    expect(ids.length, greaterThanOrEqualTo(5));
     final poster = RecordingPoster();
     final model = AppModel(
       store: store,
@@ -150,16 +168,27 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pumpAndSettle();
+    expect(find.text('今日练习的词'), findsOneWidget);
+    // Home presents every today word (cn before 懂了), all findable on one screen.
+    for (final id in ids) {
+      final cn = store.word(id)!.cn;
+      expect(find.text(cn), findsWidgets);
+    }
+
     await tester.tap(find.text('开始练习'));
     await tester.pumpAndSettle();
     expect(find.text('跟教练练习'), findsOneWidget);
     expect(find.textContaining('还差'), findsWidgets);
-    expect(find.text('hello'), findsWidgets);
-    expect(find.text('懂了'), findsWidgets);
-    await tester.tap(find.text('懂了').first);
+    // Compact chip, not a card wall.
+    expect(find.textContaining('懂了'), findsWidgets);
+    await tester.tap(find.textContaining('hello · 懂了'));
     await tester.pumpAndSettle();
     expect(poster.calls, isEmpty);
-    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(
+      store.successReviewOn('cc_a1_hello_noun_ce4a5e'),
+      DateTime(2026, 1, 3),
+    );
     expect(store.vocabSeen('cc_a1_hello_noun_ce4a5e'), isTrue);
     expect(store.progressJson().contains('apiKey'), isFalse);
   });
@@ -242,10 +271,11 @@ void main() {
     expect(find.text('开始练习'), findsOneWidget);
   });
 
-  testWidgets('closing coach chat keeps 懂了 and resumes', (
-    tester,
-  ) async {
-    final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
+  testWidgets('closing coach chat keeps 懂了 and resumes', (tester) async {
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 1, 1),
+      levelChosen: true,
+    );
     final poster = RecordingPoster();
     final model = AppModel(
       store: store,
@@ -254,22 +284,32 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('开始练习'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('懂了').first);
+    // Acknowledge on home word card.
+    await tester.tap(find.widgetWithText(TextButton, '懂了').first);
     await tester.pumpAndSettle();
-    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(
+      store.successReviewOn('cc_a1_hello_noun_ce4a5e'),
+      DateTime(2026, 1, 3),
+    );
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
-
-    await tester.tap(find.byIcon(Icons.close));
-    await tester.pumpAndSettle();
     expect(find.text('继续练习'), findsOneWidget);
+    expect(find.text('已懂'), findsWidgets);
 
     await tester.tap(find.text('继续练习'));
     await tester.pumpAndSettle();
-    expect(find.text('懂了'), findsWidgets);
+    await tester.tap(find.byIcon(Icons.close));
+    await tester.pumpAndSettle();
+    expect(find.text('继续练习'), findsOneWidget);
+    expect(find.text('已懂'), findsWidgets);
+
+    await tester.tap(find.text('继续练习'));
+    await tester.pumpAndSettle();
     expect(store.vocabSeen('cc_a1_hello_noun_ce4a5e'), isTrue);
-    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(
+      store.successReviewOn('cc_a1_hello_noun_ce4a5e'),
+      DateTime(2026, 1, 3),
+    );
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
     expect(poster.calls, isEmpty);
   });
@@ -295,7 +335,10 @@ void main() {
     expect(find.text('对了'), findsOneWidget);
     expect(find.text('3 天后再出现'), findsOneWidget);
     expect(find.text('下一条'), findsOneWidget);
-    expect(store.nextErrorReview('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 2, 5));
+    expect(
+      store.nextErrorReview('cc_a1_hello_noun_ce4a5e'),
+      DateTime(2026, 2, 5),
+    );
 
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
@@ -305,7 +348,10 @@ void main() {
     expect(find.text('下一条'), findsOneWidget);
     expect(find.text('3 天后再出现'), findsOneWidget);
     expect(find.text('提交'), findsNothing);
-    expect(store.nextErrorReview('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 2, 5));
+    expect(
+      store.nextErrorReview('cc_a1_hello_noun_ce4a5e'),
+      DateTime(2026, 2, 5),
+    );
   });
   testWidgets('coach bubble renders markdown bold without raw markers', (
     tester,
@@ -313,9 +359,7 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: CoachAnswerBubble(
-            content: 'Try **I like chicken.** again.',
-          ),
+          body: CoachAnswerBubble(content: 'Try **I like chicken.** again.'),
         ),
       ),
     );
@@ -323,7 +367,6 @@ void main() {
     expect(find.textContaining('**'), findsNothing);
     expect(find.textContaining('I like chicken.'), findsOneWidget);
   });
-
 }
 
 final Finder _keyField = find.byWidgetPredicate(

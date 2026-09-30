@@ -87,6 +87,7 @@ class Lexeme {
   final String cn;
   final String pos;
   final WordSource source;
+
   /// CEFR code a1|a2|b1 for book words; empty for user words.
   final String level;
 
@@ -105,11 +106,7 @@ class SceneLine {
   final String en;
   final String cn;
 
-  const SceneLine({
-    required this.speaker,
-    required this.en,
-    required this.cn,
-  });
+  const SceneLine({required this.speaker, required this.en, required this.cn});
 }
 
 class LessonScene {
@@ -215,6 +212,7 @@ class DayPlan {
   final List<String> errorWordIds;
   LessonScene? scene;
   bool dialogueDone;
+
   /// Per new-word sentence grade (presence = done; value = pass).
   final Map<String, bool> sentenceResults = {};
   int vocabCursor;
@@ -230,7 +228,6 @@ class DayPlan {
   final List<StudyNote> notes;
   final List<StudyNote> gradeNotes = [];
   DateTime? checkedInAt;
-  String? referencePreview;
 
   DayPlan({
     required this.date,
@@ -262,13 +259,17 @@ class LessonStore {
 
   final DateTime Function() _clock;
   final Random _random;
+
   /// Prefer SQL-backed picking when set; [ensureTodayPlan] falls back to RAM.
   UntaughtIdPicker? untaughtIdPicker;
+
   /// Prefer SQL COUNT when set; [untaughtInLevelCount] uses cache + RAM fallback.
   UntaughtCountFn? untaughtCountFn;
+
   /// Lazy Lexeme hydrate from SQLite by id.
   BookWordsByIds? bookWordsByIds;
   final Map<String, Lexeme> _words = {};
+
   /// Warm SQL untaught count; null means not loaded (or invalidated).
   int? _untaughtInLevelCache;
   final Map<String, DayPlan> _plans = {};
@@ -279,6 +280,7 @@ class LessonStore {
   int dailyWords = 5;
   String level = '入门';
   bool levelChosen = false;
+
   /// User dismissed the exhausted-level upgrade card for the current level.
   bool upgradeNudgeDismissed = false;
   String reasoningEffort = 'off';
@@ -335,8 +337,8 @@ class LessonStore {
   }
 
   Set<String> get _taughtNewWordIds => {
-        for (final plan in _plans.values) ...plan.newWordIds,
-      };
+    for (final plan in _plans.values) ...plan.newWordIds,
+  };
 
   List<String> _pickNewWordIdsSync() {
     final used = _taughtNewWordIds;
@@ -363,9 +365,7 @@ class LessonStore {
     final code = cefrCodeForLevel(level);
     final picker = untaughtIdPicker;
     if (picker != null) {
-      picked.addAll(
-        await picker(level: code, limit: need, exclude: exclude),
-      );
+      picked.addAll(await picker(level: code, limit: need, exclude: exclude));
     } else {
       picked.addAll(
         pickUntaughtIds(level: code, limit: need, exclude: exclude),
@@ -386,14 +386,16 @@ class LessonStore {
       if (picked.contains(entry.key)) continue;
       reviews.add(entry.key);
     }
-    final dueErrors = _errors.entries
-        .where(
-          (entry) =>
-              !entry.value.resolved && !entry.value.nextReview.isAfter(today),
-        )
-        .map((entry) => entry.key)
-        .toList()
-      ..sort();
+    final dueErrors =
+        _errors.entries
+            .where(
+              (entry) =>
+                  !entry.value.resolved &&
+                  !entry.value.nextReview.isAfter(today),
+            )
+            .map((entry) => entry.key)
+            .toList()
+          ..sort();
     final plan = DayPlan(
       date: today,
       newWordIds: picked,
@@ -428,11 +430,11 @@ class LessonStore {
 
   /// User words plus already-introduced book words (keeps 词本 UI off the full 5k list).
   List<Lexeme> get browsableWords => [
-        for (final word in _words.values)
-          if (word.source == WordSource.user ||
-              (_reviews[word.id]?.introducedOn != null))
-            word,
-      ];
+    for (final word in _words.values)
+      if (word.source == WordSource.user ||
+          (_reviews[word.id]?.introducedOn != null))
+        word,
+  ];
 
   void cacheBookWord(CefrWord entry) {
     _words.putIfAbsent(
@@ -611,15 +613,11 @@ class LessonStore {
     final already =
         plan.heldVocabId == id && plan.heldVocabCursor == plan.vocabCursor;
     if (already) {
-      return VocabFeedback(
-        wordId: id,
-        correct: true,
-        correctEn: lexeme.en,
-      );
+      return VocabFeedback(wordId: id, correct: true, correctEn: lexeme.en);
     }
-    _attempts.putIfAbsent(_key(plan.date), () => []).add(
-      _Attempt(id, lexeme.en, true),
-    );
+    _attempts
+        .putIfAbsent(_key(plan.date), () => [])
+        .add(_Attempt(id, lexeme.en, true));
     if (_isActiveError(id)) {
       _advanceError(id, today);
     } else {
@@ -628,11 +626,7 @@ class LessonStore {
     plan.heldVocabId = id;
     plan.heldVocabCursor = plan.vocabCursor;
     plan.heldVocabCorrect = true;
-    return VocabFeedback(
-      wordId: id,
-      correct: true,
-      correctEn: lexeme.en,
-    );
+    return VocabFeedback(wordId: id, correct: true, correctEn: lexeme.en);
   }
 
   /// Mark a specific today's word as seen（懂了）without walking the vocab cursor.
@@ -641,29 +635,21 @@ class LessonStore {
     final plan = ensureTodayPlan();
     final lexeme = _words[wordId];
     if (lexeme == null) return null;
-    final isToday = plan.newWordIds.contains(wordId) ||
-        plan.reviewWordIds.contains(wordId);
+    final isToday =
+        plan.newWordIds.contains(wordId) || plan.reviewWordIds.contains(wordId);
     if (!isToday) return null;
     if (vocabSeen(wordId)) {
-      return VocabFeedback(
-        wordId: wordId,
-        correct: true,
-        correctEn: lexeme.en,
-      );
+      return VocabFeedback(wordId: wordId, correct: true, correctEn: lexeme.en);
     }
-    _attempts.putIfAbsent(_key(plan.date), () => []).add(
-      _Attempt(wordId, lexeme.en, true),
-    );
+    _attempts
+        .putIfAbsent(_key(plan.date), () => [])
+        .add(_Attempt(wordId, lexeme.en, true));
     if (_isActiveError(wordId)) {
       _advanceError(wordId, today);
     } else {
       _advanceSuccess(wordId, today);
     }
-    return VocabFeedback(
-      wordId: wordId,
-      correct: true,
-      correctEn: lexeme.en,
-    );
+    return VocabFeedback(wordId: wordId, correct: true, correctEn: lexeme.en);
   }
 
   /// Legacy typed 中→英 compare. Kept for leftover error-queue tests / optional
@@ -683,9 +669,9 @@ class LessonStore {
       );
     }
     final correct = normalizeAnswer(answer) == normalizeAnswer(lexeme.en);
-    _attempts.putIfAbsent(_key(plan.date), () => []).add(
-      _Attempt(id, answer, correct),
-    );
+    _attempts
+        .putIfAbsent(_key(plan.date), () => [])
+        .add(_Attempt(id, answer, correct));
     if (correct) {
       if (_isActiveError(id)) {
         _advanceError(id, today);
@@ -698,11 +684,7 @@ class LessonStore {
     plan.heldVocabId = id;
     plan.heldVocabCursor = plan.vocabCursor;
     plan.heldVocabCorrect = correct;
-    return VocabFeedback(
-      wordId: id,
-      correct: correct,
-      correctEn: lexeme.en,
-    );
+    return VocabFeedback(wordId: id, correct: correct, correctEn: lexeme.en);
   }
 
   void advanceVocab() {
@@ -728,12 +710,7 @@ class LessonStore {
     return item != null && !item.resolved;
   }
 
-  void _markWrong(
-    String id,
-    String wrong,
-    String correct,
-    DateTime day,
-  ) {
+  void _markWrong(String id, String wrong, String correct, DateTime day) {
     _errors[id] = _ErrorItem(
       wrongAnswer: wrong,
       correctAnswer: correct,
@@ -1050,8 +1027,7 @@ class LessonStore {
     plan.checkedInAt ??= today;
   }
 
-  List<StudyNote> get savedNotes =>
-      List.unmodifiable(ensureTodayPlan().notes);
+  List<StudyNote> get savedNotes => List.unmodifiable(ensureTodayPlan().notes);
 
   bool get notesDismissed => ensureTodayPlan().notesDismissed;
 
@@ -1078,8 +1054,7 @@ class LessonStore {
     return id;
   }
 
-  bool todayContains(String id) =>
-      ensureTodayPlan().newWordIds.contains(id);
+  bool todayContains(String id) => ensureTodayPlan().newWordIds.contains(id);
 
   List<String> scheduledNewWords() =>
       List<String>.from(ensureTodayPlan().newWordIds);
@@ -1090,13 +1065,6 @@ class LessonStore {
   bool get shouldRequestScene => ensureTodayPlan().scene == null;
 
   LessonScene? get scene => ensureTodayPlan().scene;
-
-  String? get referencePreview => ensureTodayPlan().referencePreview;
-
-  /// Reference text is display-only (never part of grading).
-  void applyTranslation(String text) {
-    ensureTodayPlan().referencePreview = text.trim();
-  }
 
   Map<String, String> reviewSnapshot() {
     return {
@@ -1203,7 +1171,8 @@ class LessonStore {
     final plan = ensureTodayPlan();
     if (checkedIn) return '回看练习';
     final attempts = _attempts[_key(plan.date)] ?? [];
-    final started = attempts.isNotEmpty ||
+    final started =
+        attempts.isNotEmpty ||
         plan.sentenceResults.isNotEmpty ||
         plan.dialogueCursor > 0 ||
         (plan.scene != null);
@@ -1318,7 +1287,8 @@ class LessonStore {
             'errorWordIds': plan.errorWordIds,
             'dialogueDone': plan.dialogueDone,
             'sentenceResults': {
-              for (final entry in plan.sentenceResults.entries) entry.key: entry.value,
+              for (final entry in plan.sentenceResults.entries)
+                entry.key: entry.value,
             },
             'vocabCursor': plan.vocabCursor,
             'dialogueCursor': plan.dialogueCursor,
@@ -1333,7 +1303,6 @@ class LessonStore {
             'checkedInAt': plan.checkedInAt == null
                 ? null
                 : _key(plan.checkedInAt!),
-            'referencePreview': plan.referencePreview,
             'notes': [
               for (final note in plan.notes)
                 {
@@ -1359,11 +1328,7 @@ class LessonStore {
                     'grammarExamples': plan.scene!.grammarExamples,
                     'dialogue': [
                       for (final line in plan.scene!.dialogue)
-                        {
-                          'speaker': line.speaker,
-                          'en': line.en,
-                          'cn': line.cn,
-                        },
+                        {'speaker': line.speaker, 'en': line.en, 'cn': line.cn},
                     ],
                   },
           },
@@ -1450,7 +1415,9 @@ class LessonStore {
     }
     upgradeNudgeDismissed = json['upgradeNudgeDismissed'] == true;
     if (json['reasoningEffort'] is String) {
-      reasoningEffort = normalizeReasoningEffort(json['reasoningEffort'] as String);
+      reasoningEffort = normalizeReasoningEffort(
+        json['reasoningEffort'] as String,
+      );
     }
     if (goals.contains(json['goal'])) goal = json['goal'] as String;
     if (tones.contains(json['tone'])) tone = json['tone'] as String;
@@ -1513,8 +1480,6 @@ class LessonStore {
         plan.heldErrorCorrect = item['heldErrorCorrect'] == true;
         plan.notesDismissed = item['notesDismissed'] == true;
         plan.checkedInAt = _parseDay(item['checkedInAt']);
-        final preview = item['referencePreview'];
-        if (preview is String) plan.referencePreview = preview;
         // Legacy `quiz` payloads are ignored (four-question gate removed).
         final sentences = item['sentenceResults'];
         if (sentences is Map) {
@@ -1621,7 +1586,10 @@ class LessonStore {
 
   List<String> _stringList(Object? raw) {
     if (raw is! List) return [];
-    return [for (final item in raw) if (item is String) item];
+    return [
+      for (final item in raw)
+        if (item is String) item,
+    ];
   }
 
   List<StudyNote> _notes(Object? raw) {
@@ -1645,7 +1613,9 @@ class LessonStore {
     final grammarCn = raw['grammarCn'];
     final examples = raw['grammarExamples'];
     final dialogue = raw['dialogue'];
-    if (scenarioEn is! String || scenarioCn is! String || grammarCn is! String) {
+    if (scenarioEn is! String ||
+        scenarioCn is! String ||
+        grammarCn is! String) {
       return null;
     }
     if (examples is! List || dialogue is! List) return null;

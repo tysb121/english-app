@@ -18,9 +18,6 @@ class AppModel extends ChangeNotifier {
     this.deepSeekKey = '',
     this.deepSeekBase = 'https://api.deepseek.com',
     this.deepSeekModel = 'deepseek-flash',
-    this.tokenHubKey = '',
-    this.tokenHubBase = 'https://tokenhub.tencentmaas.com/v1',
-    this.tokenHubModel = 'hy-mt2-plus',
     this.unlocked = false,
     this.persistProgress,
     this.persistSecrets,
@@ -32,9 +29,6 @@ class AppModel extends ChangeNotifier {
   String deepSeekKey;
   String deepSeekBase;
   String deepSeekModel;
-  String tokenHubKey;
-  String tokenHubBase;
-  String tokenHubModel;
   bool unlocked;
   final void Function(String json)? persistProgress;
   final void Function(SavedSecrets secrets)? persistSecrets;
@@ -44,7 +38,6 @@ class AppModel extends ChangeNotifier {
   Future<String?>? _sceneTask;
 
   bool get hasDeepSeekKey => deepSeekKey.trim().isNotEmpty;
-  bool get hasTokenHubKey => tokenHubKey.trim().isNotEmpty;
 
   void commit() {
     final save = persistProgress;
@@ -70,7 +63,6 @@ class AppModel extends ChangeNotifier {
     await store.ensureTodayPlanAsync();
     commit();
   }
-
 
   void unlock() {
     if (!hasDeepSeekKey) return;
@@ -98,23 +90,6 @@ class AppModel extends ChangeNotifier {
     deepSeekModel = modelName.trim().isEmpty
         ? 'deepseek-flash'
         : modelName.trim();
-    _saveSecrets();
-    notifyListeners();
-    return null;
-  }
-
-  String? updateTokenHub({
-    required String key,
-    required String base,
-    required String modelName,
-  }) {
-    final nextBase = base.trim().isEmpty
-        ? 'https://tokenhub.tencentmaas.com/v1'
-        : base.trim();
-    if (!_https(nextBase)) return '地址只接受 https';
-    tokenHubKey = key.trim();
-    tokenHubBase = nextBase;
-    tokenHubModel = modelName.trim().isEmpty ? 'hy-mt2-plus' : modelName.trim();
     _saveSecrets();
     notifyListeners();
     return null;
@@ -191,11 +166,7 @@ class AppModel extends ChangeNotifier {
     required String requiredWords,
     required String answer,
   }) {
-    return _grade(
-      prompt: prompt,
-      requiredWords: requiredWords,
-      answer: answer,
-    );
+    return _grade(prompt: prompt, requiredWords: requiredWords, answer: answer);
   }
 
   Future<String?> explain() async {
@@ -209,37 +180,14 @@ class AppModel extends ChangeNotifier {
     return error;
   }
 
-  Future<String?> translate(String text, {required bool toChinese}) async {
-    if (!hasTokenHubKey) return '没填密钥';
-    final call = tokenHubTranslation(
-      apiKey: tokenHubKey.trim(),
-      text: text,
-      toChinese: toChinese,
-      baseUrl: tokenHubBase,
-      model: tokenHubModel,
-    );
-    if (call.uri.scheme != 'https') return '地址只接受 https';
-    final first = await _translateOnce(call);
-    if (first.accepted) {
-      store.applyTranslation(first.text!);
-      commit();
-      return null;
-    }
-    if (!first.retry) return first.error;
-    final second = await _translateOnce(call);
-    if (second.accepted) {
-      store.applyTranslation(second.text!);
-      commit();
-      return null;
-    }
-    return second.error ?? '请再试一次';
-  }
-
   Future<String?> _fillScene() async {
     store.sceneInFlight = true;
     notifyListeners();
     try {
-      return await runTask(task: 'fill_scene', messages: fillSceneMessages(store));
+      return await runTask(
+        task: 'fill_scene',
+        messages: fillSceneMessages(store),
+      );
     } on Object {
       return '服务暂时不可用';
     } finally {
@@ -282,8 +230,7 @@ class AppModel extends ChangeNotifier {
       ...messages,
       {
         'role': 'user',
-        'content':
-            '上一次没有返回合法 JSON。原文如下：\n${_clip(first.raw)}\n请只重发合法 JSON。',
+        'content': '上一次没有返回合法 JSON。原文如下：\n${_clip(first.raw)}\n请只重发合法 JSON。',
       },
     ];
     final second = await _once(task, retryMessages, sentenceWordId);
@@ -350,37 +297,12 @@ class AppModel extends ChangeNotifier {
     }
   }
 
-  Future<_TranslationResult> _translateOnce(ApiCall call) async {
-    try {
-      final posted = await poster.send(call);
-      if (posted.status != 200) {
-        final retry =
-            posted.status == 500 || posted.status == 503 || posted.status == 0;
-        final message = posted.status == 402
-            ? '未开通该模型或余额不足'
-            : deepSeekStatusText(posted.status);
-        return _TranslationResult.fail(message, retry: retry);
-      }
-      final reply = parseChatReply(posted.body);
-      final text = reply?.content;
-      if (text == null || !plainTranslation(text)) {
-        return const _TranslationResult.fail('请再试一次', retry: true);
-      }
-      return _TranslationResult.ok(text.trim());
-    } on Object {
-      return const _TranslationResult.fail('服务暂时不可用', retry: true);
-    }
-  }
-
   void _saveSecrets() {
     persistSecrets?.call(
       SavedSecrets(
         deepSeekKey: deepSeekKey,
         deepSeekBase: deepSeekBase,
         deepSeekModel: deepSeekModel,
-        tokenHubKey: tokenHubKey,
-        tokenHubBase: tokenHubBase,
-        tokenHubModel: tokenHubModel,
       ),
     );
   }
@@ -410,20 +332,4 @@ class _AttemptResult {
 
   const _AttemptResult.fail(this.error, {this.raw, this.retry = false})
     : accepted = false;
-}
-
-class _TranslationResult {
-  final bool accepted;
-  final bool retry;
-  final String? error;
-  final String? text;
-
-  const _TranslationResult.ok(this.text)
-    : accepted = true,
-      retry = false,
-      error = null;
-
-  const _TranslationResult.fail(this.error, {this.retry = false})
-    : accepted = false,
-      text = null;
 }

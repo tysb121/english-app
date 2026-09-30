@@ -33,8 +33,9 @@ class _TodayPageState extends State<TodayPage> {
     }
     final todayWords = plan.newWordIds;
     final reviewExtra = plan.reviewWordIds;
-    final tomorrowLine =
-        store.checkedIn ? store.tomorrowReviewPreviewLine() : null;
+    final tomorrowLine = store.checkedIn
+        ? store.tomorrowReviewPreviewLine()
+        : null;
     return SoftScaffold(
       body: Stack(
         children: [
@@ -56,19 +57,29 @@ class _TodayPageState extends State<TodayPage> {
                         const Spacer(),
                         Text(
                           '连续 ${store.streak()}',
-                          style: const TextStyle(color: muted, fontWeight: FontWeight.w600),
+                          style: const TextStyle(
+                            color: muted,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                         if (store.checkedIn) ...[
                           const SizedBox(width: 8),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: pine.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: const Text(
                               '已完成',
-                              style: TextStyle(color: pine, fontSize: 12, fontWeight: FontWeight.w700),
+                              style: TextStyle(
+                                color: pine,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
                           ),
                         ],
@@ -118,12 +129,12 @@ class _TodayPageState extends State<TodayPage> {
               if (!model.hasDeepSeekKey) ...[
                 const SizedBox(height: 10),
                 const Text(
-                  '还没填写 DeepSeek 密钥：可以先点词卡「懂了」；要和教练对话，请到「我的」填写。',
+                  '还没填写 DeepSeek 密钥：可以先在下方词卡点「懂了」；要和教练对话，请到「我的」填写。',
                   style: TextStyle(fontSize: 13, color: muted),
                 ),
               ],
               if (plan.errorWordIds.isNotEmpty) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton.icon(
@@ -133,9 +144,20 @@ class _TodayPageState extends State<TodayPage> {
                   ),
                 ),
               ],
+              const SizedBox(height: 6),
+              const SectionTitle(
+                '今日练习的词',
+                icon: Icons.chat_bubble_outline_rounded,
+              ),
+              for (final id in todayWords) _card(model, store, id),
+              if (reviewExtra.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                const SectionTitle('复习', icon: Icons.replay_rounded),
+                for (final id in reviewExtra) _card(model, store, id),
+              ],
               const SizedBox(height: 8),
               const Text(
-                '点进教练聊天练习今天的词：先「懂了」，再在对话里「用过」，聊几轮就完成。有到期错词可以另外练。',
+                '先在词卡上点「懂了」，再进教练聊天「用过」并聊几轮。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
               if (tomorrowLine != null) ...[
@@ -144,14 +166,6 @@ class _TodayPageState extends State<TodayPage> {
                   tomorrowLine,
                   style: const TextStyle(fontSize: 13, color: pine),
                 ),
-              ],
-              const SizedBox(height: 8),
-              const SectionTitle('今日练习的词', icon: Icons.chat_bubble_outline_rounded),
-              for (final id in todayWords) _card(store, id),
-              if (reviewExtra.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                const SectionTitle('复习', icon: Icons.replay_rounded),
-                for (final id in reviewExtra) _card(store, id),
               ],
             ],
           ),
@@ -166,7 +180,8 @@ class _TodayPageState extends State<TodayPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const SectionTitle('笔记草稿', icon: Icons.edit_note_rounded),
-        if (_drafts.isEmpty) const Text('今天没有要记的句子', style: TextStyle(color: muted)),
+        if (_drafts.isEmpty)
+          const Text('今天没有要记的句子', style: TextStyle(color: muted)),
         for (var i = 0; i < _drafts.length; i++)
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -202,46 +217,100 @@ class _TodayPageState extends State<TodayPage> {
     );
   }
 
-  Widget _card(LessonStore store, String id) {
+  Widget _card(AppModel model, LessonStore store, String id) {
     final word = store.word(id);
     if (word == null) return const SizedBox.shrink();
     final known = store.vocabSeen(id);
-    return AppCard(
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: (known ? pine : indigo).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              known ? Icons.visibility_rounded : Icons.visibility_off_outlined,
-              color: known ? pine : indigo,
-              size: 20,
-            ),
+    final used = store.wordUsed(id);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: mist,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: used
+                ? pine.withValues(alpha: 0.35)
+                : known
+                ? pine.withValues(alpha: 0.18)
+                : softBorder,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  known ? word.en : word.cn,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: (used || known ? pine : indigo).withValues(
+                    alpha: 0.12,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  known
-                      ? '${word.cn} · ${posLabelZh(word.pos)}'
-                      : posLabelZh(word.pos),
-                  style: const TextStyle(color: muted, fontSize: 13),
+                child: Icon(
+                  used
+                      ? Icons.check_circle_rounded
+                      : known
+                      ? Icons.visibility_rounded
+                      : Icons.visibility_off_outlined,
+                  color: used || known ? pine : indigo,
+                  size: 18,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      known ? word.en : word.cn,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      known
+                          ? '${word.cn} · ${posLabelZh(word.pos)}'
+                          : posLabelZh(word.pos),
+                      style: const TextStyle(color: muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              if (!known)
+                TextButton(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () {
+                    store.acknowledgeWord(id);
+                    model.commit();
+                    setState(() {});
+                  },
+                  child: const Text('懂了'),
+                )
+              else
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(
+                    used ? '已用' : '已懂',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: used ? pine : muted,
+                    ),
+                  ),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -256,16 +325,12 @@ class _TodayPageState extends State<TodayPage> {
       );
       return;
     }
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const CoachThreadPage(),
-      ),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const CoachThreadPage()));
   }
 
   void _openErrors(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const PracticePage()),
-    );
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const PracticePage()));
   }
 }

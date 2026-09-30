@@ -67,7 +67,7 @@ void main() {
     expect(poster.calls, hasLength(2));
   });
 
-  test('probe and translation do not grade sentences', () async {
+  test('probe does not grade sentences', () async {
     final store = fixtureStore(clock: () => DateTime(2026, 5, 4));
     store.ensureTodayPlan();
     final wordId = store.scheduledNewWords()[1];
@@ -78,15 +78,11 @@ void main() {
       sentenceWordId: wordId,
     );
     final sentences = store.sentenceSnapshot();
-    final poster = ScriptPoster([
-      Posted(200, '{"ok":true}'),
-      Posted(200, _wrap('你好')),
-    ]);
+    final poster = ScriptPoster([Posted(200, '{"ok":true}')]);
     final model = AppModel(
       store: store,
       poster: poster,
       deepSeekKey: 'test-key',
-      tokenHubKey: 'hub-key',
     );
     expect(await model.testConnection(), '已连通');
     final probe = poster.calls.first;
@@ -95,14 +91,7 @@ void main() {
     expect(probeContent.toLowerCase(), contains('json'));
     expect(probe.body['response_format'], {'type': 'json_object'});
     expect(store.sentenceSnapshot(), sentences);
-    final translated = await model.translate('hello', toChinese: true);
-    expect(translated, isNull);
-    expect(store.referencePreview, '你好');
-    expect(store.sentenceSnapshot(), sentences);
-    expect(poster.calls.last.uri.host, 'tokenhub.tencentmaas.com');
-    expect(poster.calls.last.uri.path, '/v1/chat/completions');
-    expect(poster.calls.last.body['model'], 'hy-mt2-plus');
-    expect(poster.calls.last.body.containsKey('response_format'), isFalse);
+    expect(poster.calls, hasLength(1));
   });
 }
 

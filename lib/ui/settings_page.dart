@@ -29,14 +29,10 @@ class _SettingsPageState extends State<SettingsPage> {
   late final TextEditingController _key = TextEditingController();
   late final TextEditingController _base = TextEditingController();
   late final TextEditingController _modelName = TextEditingController();
-  late final TextEditingController _translateKey = TextEditingController();
-  late final TextEditingController _translateBase = TextEditingController();
-  late final TextEditingController _translateModel = TextEditingController();
   String? _message;
   bool _busy = false;
   bool _filled = false;
   bool _obscureDeepSeek = true;
-  bool _obscureTokenHub = true;
   String _appVersion = '…';
 
   static const _levels = productLevels;
@@ -69,9 +65,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _key.text = model.deepSeekKey;
     _base.text = model.deepSeekBase;
     _modelName.text = model.deepSeekModel;
-    _translateKey.text = model.tokenHubKey;
-    _translateBase.text = model.tokenHubBase;
-    _translateModel.text = model.tokenHubModel;
   }
 
   @override
@@ -79,9 +72,6 @@ class _SettingsPageState extends State<SettingsPage> {
     _key.dispose();
     _base.dispose();
     _modelName.dispose();
-    _translateKey.dispose();
-    _translateBase.dispose();
-    _translateModel.dispose();
     super.dispose();
   }
 
@@ -130,7 +120,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 controller: _base,
                 autocorrect: false,
                 enableSuggestions: false,
-                decoration: const InputDecoration(hintText: 'https://api.deepseek.com'),
+                decoration: const InputDecoration(
+                  hintText: 'https://api.deepseek.com',
+                ),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -172,58 +164,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: const Text('先看看，稍后再填密钥'),
               ),
             ),
-          const SizedBox(height: 12),
-          ExpansionTile(
-            title: const Text('参考翻译密钥'),
-            children: [
-              TextField(
-                controller: _translateKey,
-                obscureText: _obscureTokenHub,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: InputDecoration(
-                  hintText: '不填也能开始',
-                  suffixIcon: IconButton(
-                    tooltip: _obscureTokenHub ? '显示' : '隐藏',
-                    icon: Icon(
-                      _obscureTokenHub
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
-                    ),
-                    onPressed: () =>
-                        setState(() => _obscureTokenHub = !_obscureTokenHub),
-                  ),
-                ),
-              ),
-              ExpansionTile(
-                title: const Text('高级'),
-                children: [
-                  TextField(
-                    controller: _translateBase,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(
-                      hintText: 'https://tokenhub.tencentmaas.com/v1',
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _translateModel,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    decoration: const InputDecoration(hintText: 'hy-mt2-plus'),
-                  ),
-                ],
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: () => _saveTokenHub(model),
-                  child: const Text('保存'),
-                ),
-              ),
-            ],
-          ),
           if (!widget.gate) ...[
             const SizedBox(height: 16),
             const SectionTitle('每天新词', icon: Icons.numbers_rounded),
@@ -327,7 +267,10 @@ class _SettingsPageState extends State<SettingsPage> {
               contentPadding: EdgeInsets.zero,
               title: const Text('清除数据重来'),
               subtitle: const Text('清空练习进度与聊天，保留密钥和水平设置'),
-              trailing: const Icon(Icons.delete_outline_rounded, color: wrongRed),
+              trailing: const Icon(
+                Icons.delete_outline_rounded,
+                color: wrongRed,
+              ),
               onTap: _busy ? null : () => _confirmClear(model),
             ),
           ],
@@ -366,15 +309,6 @@ class _SettingsPageState extends State<SettingsPage> {
       key: _key.text,
       base: _base.text,
       modelName: _modelName.text,
-    );
-    setState(() => _message = error);
-  }
-
-  void _saveTokenHub(AppModel model) {
-    final error = model.updateTokenHub(
-      key: _translateKey.text,
-      base: _translateBase.text,
-      modelName: _translateModel.text,
     );
     setState(() => _message = error);
   }
@@ -432,11 +366,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            path == null ? '诊断日志已复制' : '诊断日志已复制，并尝试打开文件',
-          ),
-        ),
+        SnackBar(content: Text(path == null ? '诊断日志已复制' : '诊断日志已复制，并尝试打开文件')),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -448,9 +378,7 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清除数据重来？'),
-        content: const Text(
-          '将清空练习进度与教练聊天。密钥、水平和词数设置会保留。此操作不可撤销。',
-        ),
+        content: const Text('将清空练习进度与教练聊天。密钥、水平和词数设置会保留。此操作不可撤销。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -468,9 +396,8 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await model.clearLocalLearning();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已清除，可以重新开始练习')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已清除，可以重新开始练习')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -478,16 +405,15 @@ class _SettingsPageState extends State<SettingsPage> {
 }
 
 String get _deviceRecordHint {
-  final mobile = defaultTargetPlatform == TargetPlatform.android ||
+  final mobile =
+      defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS;
   if (mobile) return '学习记录只保存在这台手机上，卸载应用会一并删除。';
   return '学习记录只保存在本机，清除应用数据会删除。';
 }
 
 Color _statusColor(String message) {
-  if (message == '已连通' ||
-      message == '正在测试' ||
-      message.startsWith('已连通')) {
+  if (message == '已连通' || message == '正在测试' || message.startsWith('已连通')) {
     return pine;
   }
   return wrongRed;

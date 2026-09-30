@@ -6,17 +6,11 @@ class SavedSecrets {
   final String deepSeekKey;
   final String deepSeekBase;
   final String deepSeekModel;
-  final String tokenHubKey;
-  final String tokenHubBase;
-  final String tokenHubModel;
 
   const SavedSecrets({
     this.deepSeekKey = '',
     this.deepSeekBase = 'https://api.deepseek.com',
     this.deepSeekModel = 'deepseek-flash',
-    this.tokenHubKey = '',
-    this.tokenHubBase = 'https://tokenhub.tencentmaas.com/v1',
-    this.tokenHubModel = 'hy-mt2-plus',
   });
 }
 
@@ -35,8 +29,7 @@ class _MemoryStorage extends FlutterSecureStorage {
     WindowsOptions? wOptions,
     WebOptions? webOptions,
     MacOsOptions? mOptions,
-  }) async =>
-      _data[key];
+  }) async => _data[key];
 
   @override
   Future<void> write({
@@ -72,12 +65,19 @@ class _MemoryStorage extends FlutterSecureStorage {
 
 class SecureSecrets {
   SecureSecrets({FlutterSecureStorage? storage})
-    : _storage = storage ??
-          (Platform.isLinux ? const _MemoryStorage() : const FlutterSecureStorage());
+    : _storage =
+          storage ??
+          (Platform.isLinux
+              ? const _MemoryStorage()
+              : const FlutterSecureStorage());
 
   final FlutterSecureStorage _storage;
 
   Future<SavedSecrets> load() async {
+    // Drop legacy TokenHub keys if still present.
+    _write('tokenhub_key', '');
+    _write('tokenhub_base', '');
+    _write('tokenhub_model', '');
     return SavedSecrets(
       deepSeekKey: await _read('deepseek_key'),
       deepSeekBase: await _read(
@@ -85,12 +85,6 @@ class SecureSecrets {
         fallback: 'https://api.deepseek.com',
       ),
       deepSeekModel: await _read('deepseek_model', fallback: 'deepseek-flash'),
-      tokenHubKey: await _read('tokenhub_key'),
-      tokenHubBase: await _read(
-        'tokenhub_base',
-        fallback: 'https://tokenhub.tencentmaas.com/v1',
-      ),
-      tokenHubModel: await _read('tokenhub_model', fallback: 'hy-mt2-plus'),
     );
   }
 
@@ -98,9 +92,9 @@ class SecureSecrets {
     _write('deepseek_key', secrets.deepSeekKey);
     _write('deepseek_base', secrets.deepSeekBase);
     _write('deepseek_model', secrets.deepSeekModel);
-    _write('tokenhub_key', secrets.tokenHubKey);
-    _write('tokenhub_base', secrets.tokenHubBase);
-    _write('tokenhub_model', secrets.tokenHubModel);
+    _write('tokenhub_key', '');
+    _write('tokenhub_base', '');
+    _write('tokenhub_model', '');
   }
 
   Future<String> _read(String key, {String fallback = ''}) async {

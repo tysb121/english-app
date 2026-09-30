@@ -4,7 +4,6 @@ import '../app/app_model.dart';
 import '../engine/api_requests.dart';
 import '../engine/chat_message.dart';
 import '../engine/lesson_store.dart';
-import '../engine/pos_label.dart';
 import 'english_app.dart';
 import 'theme.dart';
 import 'thinking_panel.dart';
@@ -40,7 +39,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           _local.add(
             const _Bubble(
               role: _BubbleRole.coach,
-              text: '今天要练这几个词。先点「懂了」看一眼，再试着在对话里用上——聊几轮就行。',
+              text: '今天的词在首页词卡上。先点「懂了」看一眼，再回来在对话里用上——聊几轮就行。',
             ),
           );
         });
@@ -61,9 +60,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final store = model.store;
     final checkedIn = store.checkedIn;
     return SoftScaffold(
-      title: widget.readOnly
-          ? '回看练习'
-          : (checkedIn ? '今日练习完成' : '跟教练练习'),
+      title: widget.readOnly ? '回看练习' : (checkedIn ? '今日练习完成' : '跟教练练习'),
       leading: IconButton(
         icon: const Icon(Icons.close),
         onPressed: () => Navigator.of(context).pop(),
@@ -75,10 +72,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               children: [
-                if (!widget.readOnly) ...[
-                  _wordMiniCards(model, store),
-                  const SizedBox(height: 8),
-                ],
+                if (!widget.readOnly) _understoodChips(model, store),
                 if (model.chat?.contextSummary != null &&
                     !model.chat!.contextSummary!.isEmptyText)
                   Padding(
@@ -120,7 +114,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                     ),
                 if (!model.hasDeepSeekKey && !widget.readOnly) ...[
                   const SizedBox(height: 8),
-                  _keyCta('跟教练对话需要 DeepSeek 密钥。点「懂了」可以先看今天的词。'),
+                  _keyCta('跟教练对话需要 DeepSeek 密钥。可先回首页词卡点「懂了」。'),
                 ],
                 if (_status != null)
                   Padding(
@@ -249,110 +243,42 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     );
   }
 
-  Widget _wordMiniCards(AppModel model, LessonStore store) {
+  /// Compact 懂了 actions for words not yet acknowledged (no card wall).
+  Widget _understoodChips(AppModel model, LessonStore store) {
     final plan = store.requiredTodayPlan;
-    final count = plan.newWordIds.length;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final maxW = constraints.maxWidth.isFinite
-            ? constraints.maxWidth
-            : MediaQuery.sizeOf(context).width - 32;
-        const gap = 8.0;
-        // Prefer ~3 per row so ~5 words show fully in two short rows.
-        final cols = count <= 3 ? (count == 0 ? 1 : count) : 3;
-        final width = ((maxW - gap * (cols - 1)) / cols).clamp(96.0, 200.0);
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 2),
-          child: Wrap(
-            spacing: gap,
-            runSpacing: gap,
-            children: [
-              for (final id in plan.newWordIds)
-                SizedBox(
-                  width: width,
-                  child: _miniCard(model, store, id),
+    final pending = [
+      for (final id in plan.newWordIds)
+        if (!store.vocabSeen(id)) id,
+    ];
+    if (pending.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SizedBox(
+        height: 36,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: pending.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 6),
+          itemBuilder: (context, i) {
+            final id = pending[i];
+            final en = store.word(id)?.en ?? id;
+            return ActionChip(
+              avatar: const Icon(Icons.visibility_outlined, size: 16),
+              label: Text(
+                '$en · 懂了',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _miniCard(AppModel model, LessonStore store, String id) {
-    final word = store.word(id);
-    if (word == null) return const SizedBox.shrink();
-    final seen = store.vocabSeen(id);
-    final used = store.wordUsed(id);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: mist,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: used
-              ? pine.withValues(alpha: 0.35)
-              : seen
-                  ? pine.withValues(alpha: 0.18)
-                  : softBorder,
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(8, 7, 8, 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              word.en,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
               ),
-            ),
-            Text(
-              '${word.cn} · ${posLabelZh(word.pos)}',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 10, color: muted),
-            ),
-            const SizedBox(height: 4),
-            if (!seen)
-              GestureDetector(
-                onTap: widget.readOnly || _busy
-                    ? null
-                    : () => _onUnderstood(model, store, id),
-                child: Text(
-                  '懂了',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: widget.readOnly || _busy ? muted : pine,
-                  ),
-                ),
-              )
-            else
-              _statusChip(used ? '已用' : '已懂', filled: used),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _statusChip(String label, {required bool filled}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        color: filled ? pine.withValues(alpha: 0.14) : indigo.withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w700,
-          color: filled ? pine : muted,
+              onPressed: widget.readOnly || _busy
+                  ? null
+                  : () => _onUnderstood(model, store, id),
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            );
+          },
         ),
       ),
     );
@@ -468,10 +394,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final feedback = store.acknowledgeWord(id);
     if (feedback != null) {
       _local.add(
-        _Bubble(
-          role: _BubbleRole.coach,
-          text: '已看过 ${feedback.correctEn}',
-        ),
+        _Bubble(role: _BubbleRole.coach, text: '已看过 ${feedback.correctEn}'),
       );
     }
     model.commit();

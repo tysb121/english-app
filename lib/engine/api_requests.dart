@@ -6,16 +6,10 @@ class ApiCall {
   final Map<String, String> headers;
   final Map<String, Object?> body;
 
-  const ApiCall({
-    required this.uri,
-    required this.headers,
-    required this.body,
-  });
+  const ApiCall({required this.uri, required this.headers, required this.body});
 }
 
 const deepSeekChatPath = '/chat/completions';
-const tokenHubChatPath = '/v1/chat/completions';
-const tokenHubHost = 'tokenhub.tencentmaas.com';
 
 ApiCall deepSeekChat({
   required String apiKey,
@@ -85,36 +79,6 @@ ApiCall deepSeekProbe({
   );
 }
 
-ApiCall tokenHubTranslation({
-  required String apiKey,
-  required String text,
-  required bool toChinese,
-  String baseUrl = 'https://tokenhub.tencentmaas.com/v1',
-  String model = 'hy-mt2-plus',
-}) {
-  final root = baseUrl.endsWith('/')
-      ? baseUrl.substring(0, baseUrl.length - 1)
-      : baseUrl;
-  final target = toChinese ? '中文' : '英文';
-  return ApiCall(
-    uri: Uri.parse('$root/chat/completions'),
-    headers: {
-      'Authorization': 'Bearer $apiKey',
-      'Content-Type': 'application/json',
-    },
-    body: {
-      'model': model,
-      'messages': [
-        {
-          'role': 'user',
-          'content': '将以下文本翻译为$target，注意只需要输出翻译后的结果，不要额外解释：$text',
-        },
-      ],
-      'stream': false,
-    },
-  );
-}
-
 const coachSystemPrompt =
     '你是「今日英语」应用里的英语教练，只做一件事：帮用户练英语。\n'
     '身份边界：你不是通用助手、不是编程/写作/百科/生活顾问。与练英语无关的请求，用一两句中文礼貌拒绝，'
@@ -129,8 +93,7 @@ String coachPracticeSystemPrompt({
   required List<String> todayWordLines,
   String tone = '简洁',
 }) {
-  final words =
-      todayWordLines.isEmpty ? '（暂无）' : todayWordLines.join('、');
+  final words = todayWordLines.isEmpty ? '（暂无）' : todayWordLines.join('、');
   return '$coachSystemPrompt\n'
       '今天本地冻住的词（不可增删改）：$words。\n'
       '请引导用户在对话里自然用上这些词；可给弱开口或半句提示。'

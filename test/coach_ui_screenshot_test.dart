@@ -14,40 +14,46 @@ import 'support/cefr_fixture.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('coach open shows all today word cards and soft opener', (tester) async {
-    final view = tester.view;
-    view.physicalSize = const Size(400, 900);
-    view.devicePixelRatio = 1.0;
-    addTearDown(view.resetPhysicalSize);
-    addTearDown(view.resetDevicePixelRatio);
+  testWidgets(
+    'home shows all today words; coach has opener without card wall',
+    (tester) async {
+      final view = tester.view;
+      view.physicalSize = const Size(400, 900);
+      view.devicePixelRatio = 1.0;
+      addTearDown(view.resetPhysicalSize);
+      addTearDown(view.resetDevicePixelRatio);
 
-    final store = fixtureStore(
-      clock: () => DateTime(2026, 1, 1),
-      levelChosen: true,
-    );
-    store.ensureTodayPlan();
-    final ids = store.requiredTodayPlan.newWordIds;
-    expect(ids.length, greaterThanOrEqualTo(3));
+      final store = fixtureStore(
+        clock: () => DateTime(2026, 1, 1),
+        levelChosen: true,
+      );
+      store.ensureTodayPlan();
+      final ids = store.requiredTodayPlan.newWordIds;
+      expect(ids.length, greaterThanOrEqualTo(5));
 
-    final model = AppModel(
-      store: store,
-      poster: _SilentPoster(),
-      deepSeekKey: 'test-key',
-      unlocked: true,
-      chat: ChatThread(idFactory: () => 's1'),
-    );
-    await tester.pumpWidget(EnglishApp(model: model));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    await tester.tap(find.text('开始练习'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.text('跟教练练习'), findsOneWidget);
-    for (final id in ids) {
-      expect(find.text(store.word(id)!.en), findsWidgets);
-    }
-    expect(find.textContaining('今天要练这几个词'), findsOneWidget);
-  });
+      final model = AppModel(
+        store: store,
+        poster: _SilentPoster(),
+        deepSeekKey: 'test-key',
+        unlocked: true,
+        chat: ChatThread(idFactory: () => 's1'),
+      );
+      await tester.pumpWidget(EnglishApp(model: model));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('今日练习的词'), findsOneWidget);
+      for (final id in ids) {
+        expect(find.text(store.word(id)!.cn), findsWidgets);
+      }
+      await tester.tap(find.text('开始练习'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('跟教练练习'), findsOneWidget);
+      expect(find.textContaining('今天的词在首页词卡上'), findsOneWidget);
+      // Progress kept; no mini word-card wall of EN titles as cards.
+      expect(find.textContaining('还差'), findsWidgets);
+    },
+  );
 
   testWidgets('coach markdown chat has no raw bold markers', (tester) async {
     final store = fixtureStore(

@@ -17,7 +17,7 @@
 | 词书（cefr_core） | SQLite 只读表或安装时导入 | 也可首启从 assets JSON 灌库 |
 | 计划、答题、错词、复习、打卡 | SQLite 可写表 | 替代 `english_progress.json` 里的 lesson 部分 |
 | 教练线程消息 / 检查点 | SQLite | 替代进度外壳里的 chat |
-| DeepSeek / TokenHub 密钥 | `flutter_secure_storage` | **不进 SQLite** |
+| DeepSeek 密钥 | `flutter_secure_storage` | **不进 SQLite** |
 | 用户偏好（水平、每天词数等） | SQLite settings 或同库 kv | 水平变更仍「明天生效」 |
 
 ## 建议库与表（草案）

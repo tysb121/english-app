@@ -7,7 +7,10 @@ import 'support/cefr_fixture.dart';
 
 void main() {
   test('CEFR fixture covers A1/A2/B1 for product levels', () {
-    expect(cefrFixture.where((w) => w.level == 'a1').length, greaterThanOrEqualTo(10));
+    expect(
+      cefrFixture.where((w) => w.level == 'a1').length,
+      greaterThanOrEqualTo(10),
+    );
     expect(cefrFixture.where((w) => w.level == 'a2'), isNotEmpty);
     expect(cefrFixture.where((w) => w.level == 'b1'), isNotEmpty);
     expect(normalizeLevel('新手'), '入门');
@@ -19,10 +22,7 @@ void main() {
   });
 
   test('入门 picks only A1; level change freezes today', () {
-    final store = fixtureStore(
-      clock: () => DateTime(2026, 2, 1),
-      level: '入门',
-    );
+    final store = fixtureStore(clock: () => DateTime(2026, 2, 1), level: '入门');
     final plan = store.ensureTodayPlan();
     expect(plan.newWordIds, [
       'cc_a1_hello_noun_ce4a5e',
@@ -57,10 +57,7 @@ void main() {
   });
 
   test('upgrade nudge only when untaught stock is exhausted', () {
-    final store = fixtureStore(
-      clock: () => DateTime(2026, 4, 1),
-      level: '入门',
-    );
+    final store = fixtureStore(clock: () => DateTime(2026, 4, 1), level: '入门');
     expect(store.nextProductLevel, '基础');
     expect(store.untaughtInLevelCount(), 15);
     expect(store.shouldOfferLevelUpgrade, isFalse);
@@ -183,7 +180,10 @@ void main() {
     store.advanceVocab();
     expect(store.vocabDone, isTrue);
     expect(store.vocabThresholdMet, isTrue);
-    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(
+      store.successReviewOn('cc_a1_hello_noun_ce4a5e'),
+      DateTime(2026, 1, 3),
+    );
 
     expect(store.checkedIn, isFalse);
     store.markDialogueDone();
@@ -373,7 +373,10 @@ void main() {
       isTrue,
     );
     expect(store.sentenceSnapshot().first['done'], isTrue);
-    expect(store.sentenceSnapshot().first['pass'], isTrue);  // empty errors => pass
+    expect(
+      store.sentenceSnapshot().first['pass'],
+      isTrue,
+    ); // empty errors => pass
     expect(
       store.applyModelResponse(
         task: 'explain',
@@ -386,19 +389,7 @@ void main() {
     expect(store.checkedIn, isFalse);
   });
 
-  test('TokenHub translation is a separate request and not a grade', () {
-    final call = tokenHubTranslation(
-      apiKey: 'test-key',
-      text: 'hello',
-      toChinese: true,
-    );
-    expect(call.uri.host, tokenHubHost);
-    expect(call.uri.path, tokenHubChatPath);
-    expect(call.headers['Authorization'], 'Bearer test-key');
-    expect(call.body['model'], 'hy-mt2-plus');
-    expect(call.body.containsKey('response_format'), isFalse);
-    expect(call.body.containsKey('tools'), isFalse);
-
+  test('DeepSeek structured chat request shape', () {
     final deepSeek = deepSeekChat(
       apiKey: 'deepseek-key',
       task: 'fill_scene',
@@ -412,20 +403,6 @@ void main() {
     expect(deepSeek.body['response_format'], {'type': 'json_object'});
     expect(deepSeek.body.containsKey('tools'), isFalse);
     expect(deepSeek.body['stream'], isFalse);
-
-    final store = fixtureStore(clock: () => DateTime(2026, 6, 1));
-    store.ensureTodayPlan();
-    final wordId = store.scheduledNewWords()[1];
-    store.applyModelResponse(
-      task: 'grade_open',
-      content: _failGrade,
-      finishReason: 'stop',
-      sentenceWordId: wordId,
-    );
-    final sentences = store.sentenceSnapshot();
-    store.applyTranslation('你好');
-    expect(store.referencePreview, '你好');
-    expect(store.sentenceSnapshot(), sentences);
   });
 
   test('saved progress reloads the plan and keeps keys out', () {
@@ -532,23 +509,27 @@ void main() {
   test('ensureTodayPlanAsync uses untaughtIdPicker when set', () async {
     final store = fixtureStore(clock: () => DateTime(2026, 11, 2), level: '入门');
     var calls = 0;
-    store.untaughtIdPicker = ({
-      required String level,
-      required int limit,
-      required Set<String> exclude,
-    }) async {
-      calls += 1;
-      expect(level, 'a1');
-      expect(limit, 5);
-      return store.pickUntaughtIds(level: level, limit: limit, exclude: exclude);
-    };
+    store.untaughtIdPicker =
+        ({
+          required String level,
+          required int limit,
+          required Set<String> exclude,
+        }) async {
+          calls += 1;
+          expect(level, 'a1');
+          expect(limit, 5);
+          return store.pickUntaughtIds(
+            level: level,
+            limit: limit,
+            exclude: exclude,
+          );
+        };
     final plan = await store.ensureTodayPlanAsync();
     expect(calls, 1);
     expect(plan.newWordIds, hasLength(5));
     await store.ensureTodayPlanAsync();
     expect(calls, 1);
   });
-
 
   test('sentence soft copy and dialogue openings', () {
     final store = fixtureStore(clock: () => DateTime(2026, 5, 1));
@@ -653,9 +634,11 @@ void main() {
     expect(store.tomorrowReviewWordIds(), [wrongId]);
   });
 
-
   test('clearLearningProgress wipes plans but keeps settings', () {
-    final store = fixtureStore(clock: () => DateTime(2026, 3, 1), levelChosen: true);
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 3, 1),
+      levelChosen: true,
+    );
     store.ensureTodayPlan();
     store.acknowledgeWord(store.scheduledNewWords().first);
     store.recordPracticeRound();
@@ -669,7 +652,10 @@ void main() {
   });
 
   test('diagnostic report excludes secrets and includes version', () {
-    final store = fixtureStore(clock: () => DateTime(2026, 3, 2), levelChosen: true);
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 3, 2),
+      levelChosen: true,
+    );
     store.ensureTodayPlan();
     store.recordCall(task: 'grade_open', ok: false, finishReason: 'length');
     final text = buildDiagnosticReport(
@@ -684,7 +670,6 @@ void main() {
     expect(text, isNot(contains('sk-')));
     expect(text, contains('密钥未包含'));
   });
-
 }
 
 void _reviewError(LessonStore store, String id, {required bool correctly}) {
@@ -707,14 +692,13 @@ void _answerCurrent(LessonStore store, {required bool correctly}) {
   store.advanceVocab();
 }
 
-
-const _passGrade =
-    '{"pass":true,"errors":[],"corrected_en":"I said hello."}';
+const _passGrade = '{"pass":true,"errors":[],"corrected_en":"I said hello."}';
 
 const _failGrade =
     '{"pass":false,"errors":[{"excerpt":"He go","fix":"He goes","why_cn":"第三人称单数要加 s。"}],"corrected_en":"He goes to school."}';
 
-String _scene(String name) => '''
+String _scene(String name) =>
+    '''
 {
   "scenario_en": "$name",
   "scenario_cn": "打招呼",
