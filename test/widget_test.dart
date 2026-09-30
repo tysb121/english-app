@@ -22,7 +22,57 @@ void main() {
     await tester.tap(find.text('新手'));
     await tester.pumpAndSettle();
     expect(find.text('测试连接'), findsOneWidget);
+    expect(find.text('先看看，稍后再填密钥'), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
+  });
+
+  testWidgets('browse without key reaches shell tabs', (tester) async {
+    final model = AppModel(
+      store: LessonStore(clock: () => DateTime(2026, 1, 1)),
+      poster: ThrowingPoster(),
+    );
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.tap(find.text('新手'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('先看看，稍后再填密钥'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
+    expect(find.textContaining('还没填 DeepSeek 密钥'), findsOneWidget);
+  });
+
+
+  testWidgets('我的 shows product level labels and tomorrow tip when frozen', (tester) async {
+    final store = LessonStore(clock: () => DateTime(2026, 1, 1))
+      ..levelChosen = true
+      ..level = '日常交流';
+    store.ensureTodayPlan();
+    final model = AppModel(
+      store: store,
+      poster: ThrowingPoster(),
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.tap(find.text('我的'));
+    await tester.pumpAndSettle();
+    expect(find.text('日常交流'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('水平'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('新手'), findsWidgets);
+    expect(find.text('简单工作对话'), findsOneWidget);
+    expect(find.text('更长的表达'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.textContaining('今天的计划已定'),
+      120,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.textContaining('今天的计划已定'), findsOneWidget);
   });
 
   testWidgets('a saved key shows four tabs and the home label', (tester) async {
@@ -258,7 +308,7 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('错词 1'));
+    await tester.tap(find.textContaining('错词 1'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('answer')), 'standup');
     await tester.tap(find.text('提交'));
@@ -270,7 +320,7 @@ void main() {
 
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('错词 1'));
+    await tester.tap(find.textContaining('错词 1'));
     await tester.pumpAndSettle();
     expect(find.text('对了'), findsOneWidget);
     expect(find.text('下一条'), findsOneWidget);

@@ -22,6 +22,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   final List<_Bubble> _local = [];
   String? _status;
   bool _busy = false;
+  Future<void> Function()? _retry;
 
   @override
   void dispose() {
@@ -38,6 +39,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final store = model.store;
     store.ensureTodayPlan();
     final stage = _stage(store);
+    final sceneLoading = (_busy && stage == _Stage.scene) || store.sceneInFlight;
     return Scaffold(
       appBar: AppBar(
         title: const Text('今日英语'),
@@ -72,11 +74,32 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                         text: message.content,
                       ),
                     ),
-                ..._stageBody(model, store, stage),
+                ..._stageBody(model, store, stage, sceneLoading: sceneLoading),
                 if (_status != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
-                    child: Text(_status!, style: const TextStyle(color: Color(0xFF8E2F2F))),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _status!,
+                            style: const TextStyle(color: wrongRed),
+                          ),
+                        ),
+                        if (_retry != null && !widget.readOnly)
+                          TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () async {
+                                    final action = _retry;
+                                    if (action == null) return;
+                                    await action();
+                                  },
+                            child: const Text('重试'),
+                          ),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -97,7 +120,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                     const SizedBox(width: 8),
                     FilledButton(
                       onPressed: _busy ? null : () => _onSend(model, stage),
-                      child: Text(_busy ? '…' : '发送'),
+                      child: Text(_busy ? '批改中' : '发送'),
                     ),
                   ],
                 ),
@@ -108,19 +131,17 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     );
   }
 
-  List<Widget> _stageBody(AppModel model, LessonStore store, _Stage stage) {
+  List<Widget> _stageBody(
+    AppModel model,
+    LessonStore store,
+    _Stage stage, {
+    required bool sceneLoading,
+  }) {
     switch (stage) {
       case _Stage.vocab:
         return [_vocabBlock(model, store)];
       case _Stage.scene:
-        return [
-          const Text('接下来写今天的场景。'),
-          const SizedBox(height: 8),
-          FilledButton(
-            onPressed: _busy ? null : () => _fillScene(model),
-            child: Text(_busy ? '写入中' : '生成场景'),
-          ),
-        ];
+        return [_sceneBlock(model, sceneLoading: sceneLoading)];
       case _Stage.dialogue:
         return [_dialogueBlock(store)];
       case _Stage.quiz:
@@ -132,6 +153,57 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       case _Stage.done:
         return const [Text('今天已完成。关闭回到今天。')];
     }
+  }
+
+  Widget _keyCta(String why) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(why, style: const TextStyle(color: ink)),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭后到「我的」填写密钥'),
+        ),
+      ],
+    );
+  }
+
+  Widget _sceneBlock(AppModel model, {required bool sceneLoading}) {
+    if (!model.hasDeepSeekKey) {
+      return _keyCta('生成场景需要 DeepSeek 密钥。');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('接下来写今天的场景。'),
+        const SizedBox(height: 8),
+        if (sceneLoading) ...[
+          const Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 10),
+              Text('正在写今天的场景…'),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '可以离开，回来仍停在这一步。',
+            style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+          ),
+        ] else
+          FilledButton(
+            onPressed: widget.readOnly || _busy
+                ? null
+                : () => _fillScene(model),
+            child: const Text('生成场景'),
+          ),
+      ],
+    );
   }
 
   Widget _vocabBlock(AppModel model, LessonStore store) {
@@ -170,6 +242,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final line = scene.dialogue.isEmpty
         ? null
         : scene.dialogue[cursor.clamp(0, scene.dialogue.length - 1)];
+    final model = AppScope.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -180,6 +253,10 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           Text(line.cn, style: const TextStyle(color: Color(0xFF4E4A43))),
           const SizedBox(height: 8),
           const Text('用英文接一句，发送后交给批改。'),
+        ],
+        if (!model.hasDeepSeekKey) ...[
+          const SizedBox(height: 8),
+          _keyCta('对话批改需要 DeepSeek 密钥。'),
         ],
         TextButton(
           onPressed: widget.readOnly
@@ -196,13 +273,21 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   Widget _quizBlock(AppModel model, LessonStore store) {
+    final passed = store.quizPassCount;
     final index = store.openQuizIndex;
     if (index == null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('考核进度 ${store.quizPassCount}/4'),
-          if (store.quizPassCount < 3)
+          Text(
+            '考核进度 $passed/4',
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          Text(
+            passed >= 3 ? '已达到打卡所需的 3 题。' : '还需通过 ${3 - passed} 题才能点亮考核。',
+            style: const TextStyle(color: Color(0xFF4E4A43)),
+          ),
+          if (passed < 3)
             FilledButton(
               onPressed: () {
                 store.redoFailedQuiz();
@@ -217,10 +302,22 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('考核 ${index + 1}/4'),
+        Text(
+          '考核 ${index + 1}/4',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        Text(
+          '已通过 $passed/4（至少 3 题通过才算完成考核）',
+          style: const TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+        ),
+        const SizedBox(height: 8),
         Text(store.quizPrompt(index)),
         const SizedBox(height: 8),
         const Text('在底部输入框作答并发送。'),
+        if (!model.hasDeepSeekKey) ...[
+          const SizedBox(height: 8),
+          _keyCta('考核批改需要 DeepSeek 密钥。'),
+        ],
       ],
     );
   }
@@ -230,7 +327,15 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('到期错词（最多 3 条）'),
+        const Text(
+          '到期错词（最多 3 条）',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const Text(
+          '这些是认错或到期的词，排在考核之后再练。',
+          style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+        ),
+        const SizedBox(height: 8),
         for (final id in plan.errorWordIds)
           Text('${store.word(id)?.en ?? id} · ${store.word(id)?.cn ?? ''}'),
         FilledButton(
@@ -254,7 +359,15 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('笔记草稿（可保存或跳过）'),
+        const Text(
+          '笔记草稿',
+          style: TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const Text(
+          '可保存或跳过；跳过仍算今天完成。',
+          style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+        ),
+        const SizedBox(height: 8),
         for (final note in drafts)
           Text('${note.wrong} → ${note.corrected}（${note.whyCn}）'),
         Row(
@@ -274,7 +387,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                 model.commit();
                 setState(() {});
               },
-              child: const Text('跳过'),
+              child: const Text('跳过（仍算今天完成）'),
             ),
           ],
         ),
@@ -290,6 +403,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     setState(() {
       _busy = true;
       _status = null;
+      _retry = null;
     });
     for (final id in ids) {
       var guard = 0;
@@ -325,9 +439,14 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     setState(() {
       _busy = true;
       _status = null;
+      _retry = () => _fillScene(model);
     });
     final err = await model.fillScene();
-    if (err != null) _status = err;
+    if (err != null) {
+      _status = err;
+    } else {
+      _retry = null;
+    }
     model.commit();
     setState(() => _busy = false);
   }
@@ -336,6 +455,14 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     final store = model.store;
+    if (!model.hasDeepSeekKey &&
+        (stage == _Stage.dialogue || stage == _Stage.quiz)) {
+      setState(() {
+        _status = '需要 DeepSeek 密钥才能批改。关闭后到「我的」填写。';
+        _retry = null;
+      });
+      return;
+    }
     setState(() {
       _busy = true;
       _status = null;
@@ -343,9 +470,31 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     if (stage == _Stage.quiz) {
       final index = store.openQuizIndex;
       if (index != null) {
+        _local.add(_Bubble(role: _BubbleRole.user, text: text));
         final err = await model.gradeQuiz(index, text);
         _controller.clear();
-        if (err != null) _status = err;
+        if (err != null) {
+          _status = err;
+          _retry = () async {
+            _controller.text = text;
+            await _onSend(model, stage);
+          };
+        } else {
+          _retry = null;
+          final grade = store.lastGrade;
+          if (grade != null) {
+            _local.add(
+              _Bubble(
+                role: _BubbleRole.coach,
+                text: grade.pass
+                    ? '✓ 通过（考核 ${index + 1}/4）\n${grade.correctedEn}'
+                    : '✗ 未通过（考核 ${index + 1}/4）\n'
+                        '${grade.errors.take(2).map((e) => '${e.excerpt} → ${e.fix}（${e.whyCn}）').join('\n')}\n'
+                        '改写：${grade.correctedEn}',
+              ),
+            );
+          }
+        }
         model.commit();
         setState(() => _busy = false);
         return;
@@ -361,6 +510,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           .scheduledNewWords()
           .map((id) => store.word(id)?.en ?? id)
           .join(', ');
+      _local.add(_Bubble(role: _BubbleRole.user, text: text));
       final err = await model.gradeLine(
         prompt: '用英文接话',
         requiredWords: '要表达的意思：${line?.cn ?? ''}。今天的词：$words',
@@ -369,18 +519,22 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       _controller.clear();
       if (err != null) {
         _status = err;
+        _retry = () async {
+          _controller.text = text;
+          await _onSend(model, stage);
+        };
       } else {
+        _retry = null;
         final grade = store.lastGrade;
         if (grade != null) {
           _local.add(
             _Bubble(
               role: _BubbleRole.coach,
               text: grade.pass
-                  ? '通过。${grade.correctedEn}'
-                  : grade.errors
-                      .take(2)
-                      .map((e) => '${e.excerpt} → ${e.fix}（${e.whyCn}）')
-                      .join('\n'),
+                  ? '✓ 通过\n${grade.correctedEn}\n可以继续下一句。'
+                  : '✗ 未通过，对照后再接下一句\n'
+                      '${grade.errors.take(2).map((e) => '${e.excerpt} → ${e.fix}（${e.whyCn}）').join('\n')}\n'
+                      '改写：${grade.correctedEn}',
             ),
           );
         }
@@ -407,7 +561,15 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       installId: store.installId,
     );
     _controller.clear();
-    if (err != null) _status = err;
+    if (err != null) {
+      _status = err;
+      _retry = () async {
+        _controller.text = text;
+        await _onSend(model, stage);
+      };
+    } else {
+      _retry = null;
+    }
     model.commit();
     setState(() => _busy = false);
   }
@@ -428,6 +590,16 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
 
   Widget _bubble(_Bubble bubble) {
     final mine = bubble.role == _BubbleRole.user;
+    final pass = bubble.text.startsWith('✓');
+    final fail = bubble.text.startsWith('✗');
+    final Color border;
+    if (pass) {
+      border = pine;
+    } else if (fail) {
+      border = wrongRed;
+    } else {
+      border = const Color(0xFFE3DDD2);
+    }
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -436,7 +608,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
         decoration: BoxDecoration(
           color: mine ? pine.withValues(alpha: 0.12) : Colors.white,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE3DDD2)),
+          border: Border.all(color: border, width: pass || fail ? 1.4 : 1),
         ),
         child: Text(bubble.text, style: const TextStyle(color: ink)),
       ),

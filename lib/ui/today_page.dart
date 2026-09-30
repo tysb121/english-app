@@ -67,16 +67,28 @@ class _TodayPageState extends State<TodayPage> {
                 onPressed: () => _openPrimary(context, model),
                 child: Text(store.homeActionLabel()),
               ),
+              if (!model.hasDeepSeekKey) ...[
+                const SizedBox(height: 8),
+                const Text(
+                  '还没填 DeepSeek 密钥：可以认词，生成场景和批改需到「我的」填写。',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+                ),
+              ],
               if (plan.errorWordIds.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: TextButton(
                     onPressed: () => _open(context, PracticeKind.errors),
-                    child: Text('错词 ${plan.errorWordIds.length}'),
+                    child: Text('错词 ${plan.errorWordIds.length}（考核后再练）'),
                   ),
                 ),
               ],
+              const SizedBox(height: 8),
+              const Text(
+                '认对后才会显示英文；错词排在考核之后回来练。',
+                style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+              ),
               const SizedBox(height: 16),
               for (final id in preview) _card(store, id),
               if (rest.isNotEmpty)

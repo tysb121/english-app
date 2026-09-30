@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../app/app_model.dart';
+import '../engine/lesson_store.dart';
 import 'english_app.dart';
 import 'theme.dart';
 
@@ -23,6 +25,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _message;
   bool _busy = false;
   bool _filled = false;
+
+  static const _levels = ['新手', '简单工作对话', '更长的表达'];
 
   @override
   void didChangeDependencies() {
@@ -54,11 +58,19 @@ class _SettingsPageState extends State<SettingsPage> {
     final model = AppScope.of(context);
     final store = model.store;
     final showStart = widget.gate && model.connectionOk && model.hasDeepSeekKey;
+    final level = normalizeLevel(store.level);
     return Scaffold(
       appBar: AppBar(title: const Text('今日英语')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
+          if (widget.gate) ...[
+            const Text(
+              '填写 DeepSeek 密钥后才能生成场景和批改。也可以先看看界面。',
+              style: TextStyle(color: ink, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+          ],
           const Text('DeepSeek 密钥', style: TextStyle(color: ink)),
           const SizedBox(height: 8),
           TextField(
@@ -107,6 +119,14 @@ class _SettingsPageState extends State<SettingsPage> {
               child: TextButton(
                 onPressed: _busy ? null : () => _saveDeepSeek(model),
                 child: const Text('保存'),
+              ),
+            ),
+          if (widget.gate && !showStart)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: model.browseWithoutKey,
+                child: const Text('先看看，稍后再填密钥'),
               ),
             ),
           const SizedBox(height: 12),
@@ -166,13 +186,21 @@ class _SettingsPageState extends State<SettingsPage> {
             const Text('水平'),
             const SizedBox(height: 8),
             _choices<String>(
-              values: const ['简单工作对话', '日常交流', '更长的表达'],
+              values: _levels,
               label: (value) => value,
-              selected: store.level,
+              selected: level,
               onPick: (value) {
                 store.level = value;
                 model.commit();
+                setState(() {});
               },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              store.hasFrozenTodayPlan
+                  ? '今天的计划已定，改水平与词数从明天生效。'
+                  : '已经开始的今天不变，这些改动从明天生效。',
+              style: const TextStyle(color: ink, fontSize: 13),
             ),
             const SizedBox(height: 16),
             const Text('目标'),
@@ -198,16 +226,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 model.commit();
               },
             ),
-            const SizedBox(height: 16),
-            const Text(
-              '今天已经生成的计划不动。这些改动从下一天的计划生效。',
-              style: TextStyle(color: ink, fontSize: 13),
-            ),
           ],
           const SizedBox(height: 28),
-          const Text(
-            '学习记录只在这台手机上，卸载即删除。',
-            style: TextStyle(color: ink, fontSize: 13),
+          Text(
+            _deviceRecordHint,
+            style: const TextStyle(color: ink, fontSize: 13),
           ),
         ],
       ),
@@ -278,6 +301,13 @@ class _SettingsPageState extends State<SettingsPage> {
       _message = message;
     });
   }
+}
+
+String get _deviceRecordHint {
+  final mobile = defaultTargetPlatform == TargetPlatform.android ||
+      defaultTargetPlatform == TargetPlatform.iOS;
+  if (mobile) return '学习记录只在这台手机上，卸载即删除。';
+  return '学习记录只在本机，清除应用数据会删除。';
 }
 
 Color _statusColor(String message) {

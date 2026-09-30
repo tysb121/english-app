@@ -313,6 +313,9 @@ class LessonStore {
 
   DayPlan? get todayPlan => _plans[_key(today)];
 
+  /// Today already has a plan: level/word prefs apply tomorrow.
+  bool get hasFrozenTodayPlan => todayPlan != null;
+
   List<DayPlan> get history {
     final plans = _plans.values.toList()
       ..sort((a, b) => b.date.compareTo(a.date));

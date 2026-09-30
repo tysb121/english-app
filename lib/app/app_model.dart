@@ -64,6 +64,12 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Enter the shell without a key; online steps stay blocked with a CTA.
+  void browseWithoutKey() {
+    unlocked = true;
+    notifyListeners();
+  }
+
   String? updateDeepSeek({
     required String key,
     required String base,
