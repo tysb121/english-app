@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../engine/lesson_store.dart';
+import '../engine/pos_label.dart';
 import 'english_app.dart';
 import 'theme.dart';
 
@@ -107,7 +108,7 @@ class WordsPage extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '${word.cn} · ${word.pos}',
+                  '${word.cn} · ${posLabelZh(word.pos)}',
                   style: const TextStyle(color: muted, fontSize: 13),
                 ),
               ],
@@ -144,7 +145,7 @@ class WordsPage extends StatelessWidget {
               ),
               TextField(
                 controller: pos,
-                decoration: const InputDecoration(hintText: '词性'),
+                decoration: const InputDecoration(hintText: '词性（如 noun）'),
               ),
             ],
           ),
@@ -222,7 +223,7 @@ class WordCardPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(word.cn, style: const TextStyle(fontSize: 20)),
-                    Text(word.pos, style: const TextStyle(color: muted)),
+                    Text(posLabelZh(word.pos), style: const TextStyle(color: muted)),
                     const SizedBox(height: 12),
                     Text(
                       next == null

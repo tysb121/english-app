@@ -55,3 +55,7 @@ app.*.map.json
 *.keystore
 key.properties
 **/key.properties
+
+PASSWORDS.txt
+**/PASSWORDS.txt
+android/upload-keystore.jks

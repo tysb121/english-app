@@ -28,6 +28,8 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _message;
   bool _busy = false;
   bool _filled = false;
+  bool _obscureDeepSeek = true;
+  bool _obscureTokenHub = true;
 
   static const _levels = productLevels;
 
@@ -77,10 +79,22 @@ class _SettingsPageState extends State<SettingsPage> {
           const SectionTitle('DeepSeek 密钥', icon: Icons.key_rounded),
           TextField(
             controller: _key,
-            obscureText: true,
+            obscureText: _obscureDeepSeek,
             autocorrect: false,
             enableSuggestions: false,
-            decoration: const InputDecoration(hintText: '粘贴密钥'),
+            decoration: InputDecoration(
+              hintText: '粘贴密钥',
+              suffixIcon: IconButton(
+                tooltip: _obscureDeepSeek ? '显示' : '隐藏',
+                icon: Icon(
+                  _obscureDeepSeek
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscureDeepSeek = !_obscureDeepSeek),
+              ),
+            ),
           ),
           ExpansionTile(
             title: const Text('高级'),
@@ -137,10 +151,22 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               TextField(
                 controller: _translateKey,
-                obscureText: true,
+                obscureText: _obscureTokenHub,
                 autocorrect: false,
                 enableSuggestions: false,
-                decoration: const InputDecoration(hintText: '不填也能开始'),
+                decoration: InputDecoration(
+                  hintText: '不填也能开始',
+                  suffixIcon: IconButton(
+                    tooltip: _obscureTokenHub ? '显示' : '隐藏',
+                    icon: Icon(
+                      _obscureTokenHub
+                          ? Icons.visibility_outlined
+                          : Icons.visibility_off_outlined,
+                    ),
+                    onPressed: () =>
+                        setState(() => _obscureTokenHub = !_obscureTokenHub),
+                  ),
+                ),
               ),
               ExpansionTile(
                 title: const Text('高级'),
@@ -345,6 +371,10 @@ String get _deviceRecordHint {
 }
 
 Color _statusColor(String message) {
-  if (message == '已连通' || message == '正在测试') return pine;
+  if (message == '已连通' ||
+      message == '正在测试' ||
+      message.startsWith('已连通')) {
+    return pine;
+  }
   return wrongRed;
 }

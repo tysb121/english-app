@@ -89,6 +89,11 @@ void main() {
       tokenHubKey: 'hub-key',
     );
     expect(await model.testConnection(), '已连通');
+    final probe = poster.calls.first;
+    final probeMessages = probe.body['messages'] as List;
+    final probeContent = (probeMessages.first as Map)['content'] as String;
+    expect(probeContent.toLowerCase(), contains('json'));
+    expect(probe.body['response_format'], {'type': 'json_object'});
     expect(store.sentenceSnapshot(), sentences);
     final translated = await model.translate('hello', toChinese: true);
     expect(translated, isNull);

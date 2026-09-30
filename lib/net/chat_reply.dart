@@ -56,12 +56,50 @@ bool plainTranslation(String text) {
   return true;
 }
 
-String deepSeekStatusText(int status) {
-  return switch (status) {
-    401 => '密钥无效',
-    402 => '余额不足',
-    400 || 422 => '地址或模型名不被接受',
-    429 => '稍后再试',
-    _ => '服务暂时不可用',
-  };
+String deepSeekStatusText(int status, {String? body}) {
+  if (status == 401) return '密钥无效';
+  if (status == 402) return '余额不足';
+  if (status == 429) return '稍后再试';
+  if (status == 400 || status == 422) {
+    final hint = deepSeekBodyHint(body);
+    if (hint != null) return hint;
+    return '地址或模型名不被接受';
+  }
+  return '服务暂时不可用';
+}
+
+/// Extra Chinese hint from API error body when status alone is misleading.
+String? deepSeekBodyHint(String? body) {
+  if (body == null || body.isEmpty) return null;
+  final lower = body.toLowerCase();
+  if (lower.contains("must contain the word") && lower.contains('json')) {
+    return '探测请求格式有误';
+  }
+  if (lower.contains('response_format') && lower.contains('json')) {
+    return '探测请求格式有误';
+  }
+  return null;
+}
+
+/// One short line from OpenAI-style `error.message`, for debug under the status.
+String? deepSeekErrorMessageLine(String? body, {int maxLen = 96}) {
+  if (body == null || body.isEmpty) return null;
+  try {
+    final decoded = jsonDecode(body.trim());
+    if (decoded is! Map) return null;
+    final err = decoded['error'];
+    String? message;
+    if (err is Map && err['message'] is String) {
+      message = (err['message'] as String).trim();
+    } else if (decoded['message'] is String) {
+      message = (decoded['message'] as String).trim();
+    }
+    if (message == null || message.isEmpty) return null;
+    if (message.length <= maxLen) return message;
+    return '${message.substring(0, maxLen)}…';
+  } on FormatException {
+    return null;
+  } on Object {
+    return null;
+  }
 }

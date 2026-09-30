@@ -140,7 +140,11 @@ class AppModel extends ChangeNotifier {
         }
       }
       connectionOk = false;
-      connectionMessage = deepSeekStatusText(posted.status);
+      connectionMessage = deepSeekStatusText(posted.status, body: posted.body);
+      final detail = deepSeekErrorMessageLine(posted.body);
+      if (detail != null && detail.isNotEmpty) {
+        connectionMessage = '$connectionMessage · $detail';
+      }
     } on Object {
       connectionOk = false;
       connectionMessage = '服务暂时不可用';

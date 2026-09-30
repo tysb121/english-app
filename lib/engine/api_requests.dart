@@ -72,7 +72,7 @@ ApiCall deepSeekProbe({
     body: {
       'model': model,
       'messages': [
-        {'role': 'user', 'content': '只返回 {"ok":true}'},
+        {'role': 'user', 'content': 'Reply with json only: {"ok":true}'},
       ],
       'stream': false,
       'temperature': 0,

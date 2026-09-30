@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app/app_model.dart';
 import '../engine/chat_message.dart';
 import '../engine/lesson_store.dart';
+import '../engine/pos_label.dart';
 import 'english_app.dart';
 import 'theme.dart';
 import 'thinking_panel.dart';
@@ -331,7 +332,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           Text(store.sentencePrompt(wordId)),
           if (word != null)
             Text(
-              '${word.en} · ${word.cn} · ${word.pos}',
+              '${word.en} · ${word.cn} · ${posLabelZh(word.pos)}',
               style: const TextStyle(color: Color(0xFF4E4A43)),
             ),
           const SizedBox(height: 8),

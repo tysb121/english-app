@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_model.dart';
 import '../engine/lesson_store.dart';
+import '../engine/pos_label.dart';
 import 'english_app.dart';
 import 'coach_thread_page.dart';
 import 'practice_page.dart';
@@ -244,7 +245,9 @@ class _TodayPageState extends State<TodayPage> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  known ? '${word.cn} · ${word.pos}' : word.pos,
+                  known
+                      ? '${word.cn} · ${posLabelZh(word.pos)}'
+                      : posLabelZh(word.pos),
                   style: const TextStyle(color: muted, fontSize: 13),
                 ),
               ],

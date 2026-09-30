@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../engine/lesson_store.dart';
+import '../engine/pos_label.dart';
 import 'english_app.dart';
 import 'theme.dart';
 
@@ -104,7 +105,7 @@ class _PracticePageState extends State<PracticePage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(word?.cn ?? '', style: const TextStyle(fontSize: 36, color: ink)),
-        Text(word?.pos ?? ''),
+        Text(word == null ? '' : posLabelZh(word.pos)),
         if (!pending) ...[
           const SizedBox(height: 16),
           AnswerField(controller: _answer),
