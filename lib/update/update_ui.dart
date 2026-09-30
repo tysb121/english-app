@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'github_release.dart';
 import 'release_notes.dart';
@@ -77,6 +78,27 @@ Future<void> showUpdateDialog(
   );
 }
 
+MarkdownStyleSheet _updateNotesStyle(BuildContext context) {
+  const base = TextStyle(fontSize: 14, height: 1.4, color: ink);
+  return MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+    p: base,
+    pPadding: EdgeInsets.zero,
+    strong: base.copyWith(fontWeight: FontWeight.w700),
+    em: base.copyWith(fontStyle: FontStyle.italic),
+    code: base.copyWith(
+      fontFamily: 'monospace',
+      fontSize: 13,
+      backgroundColor: indigo.withValues(alpha: 0.08),
+    ),
+    listBullet: base,
+    listIndent: 20,
+    h1: base.copyWith(fontSize: 16, fontWeight: FontWeight.w700),
+    h2: base.copyWith(fontSize: 15, fontWeight: FontWeight.w700),
+    h3: base.copyWith(fontSize: 14, fontWeight: FontWeight.w700),
+    blockSpacing: 8,
+  );
+}
+
 class _UpdateDialog extends StatefulWidget {
   const _UpdateDialog({
     required this.release,
@@ -144,7 +166,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
               style: const TextStyle(color: muted, fontSize: 13),
             ),
             const SizedBox(height: 12),
-            Text(widget.notes, style: const TextStyle(fontSize: 14, height: 1.4)),
+            MarkdownBody(
+              data: widget.notes,
+              selectable: false,
+              softLineBreak: true,
+              styleSheet: _updateNotesStyle(context),
+            ),
             if (_downloading) ...[
               const SizedBox(height: 16),
               LinearProgressIndicator(value: _progress),

@@ -52,7 +52,7 @@ void main() {
   });
 
   group('formatReleaseNotesForDisplay', () {
-    test('strips markdown and softens full-APK line from real v1.0.4 body', () {
+    test('keeps markdown and softens full-APK line from real v1.0.4 body', () {
       const raw = '''
 ## 改动
 - **新手首页词卡**：今日词默认全亮展示英文 + 中文 + 词性（EN+CN 完整呈现）
@@ -63,15 +63,15 @@ void main() {
 完整 APK 更新（非增量）。版本：`1.0.4+5`
 ''';
       final notes = formatReleaseNotesForDisplay(raw);
-      expect(notes, isNot(contains('##')));
-      expect(notes, isNot(contains('**')));
-      expect(notes, isNot(contains('`')));
+      expect(notes, contains('## 改动'));
+      expect(notes, contains('- **新手首页词卡**：'));
+      expect(notes, contains('**「看过了」记账**'));
+      expect(notes, contains('`还差：还没看×'));
+      expect(notes, isNot(contains('•')));
       expect(notes, isNot(contains('1.0.4+5')));
       expect(notes, isNot(contains('非增量')));
-      expect(notes, contains('• 新手首页词卡：'));
-      expect(notes, contains('还差：还没看×'));
       expect(notes, contains('本次需下载完整安装包。'));
-      expect(notes.split('\n').first, '改动');
+      expect(notes.split('\n').first, '## 改动');
     });
 
     test('empty body falls back', () {
@@ -83,7 +83,7 @@ void main() {
       const raw = '版本：`1.0.4+5`\n- 修复闪退';
       final notes = formatReleaseNotesForDisplay(raw);
       expect(notes, isNot(contains('1.0.4+5')));
-      expect(notes, '• 修复闪退');
+      expect(notes, '- 修复闪退');
     });
   });
 
