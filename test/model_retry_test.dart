@@ -47,7 +47,9 @@ void main() {
   test('two rejected grades do not move dates or check-in', () async {
     final store = fixtureStore(clock: () => DateTime(2026, 5, 3));
     store.ensureTodayPlan();
+    final wordId = store.scheduledNewWords().first;
     final before = store.reviewSnapshot();
+    final sentencesBefore = store.sentenceSnapshot();
     final poster = ScriptPoster([
       Posted(200, _wrap('{"pass":true}', finish: 'length')),
       Posted(401, '{"error":"bad"}'),
@@ -57,24 +59,25 @@ void main() {
       poster: poster,
       deepSeekKey: 'test-key',
     );
-    final error = await model.gradeQuiz(0, 'hello');
+    final error = await model.gradeSentence(wordId, 'hello');
     expect(error, '密钥无效');
-    expect(store.quizSnapshot(), [null, null, null, null]);
+    expect(store.sentenceSnapshot(), sentencesBefore);
     expect(store.reviewSnapshot(), before);
     expect(store.checkedIn, isFalse);
     expect(poster.calls, hasLength(2));
   });
 
-  test('probe and translation do not grade the quiz', () async {
+  test('probe and translation do not grade sentences', () async {
     final store = fixtureStore(clock: () => DateTime(2026, 5, 4));
     store.ensureTodayPlan();
+    final wordId = store.scheduledNewWords()[1];
     store.applyModelResponse(
       task: 'grade_open',
       content: '{"pass":false,"errors":[{"excerpt":"x","fix":"y","why_cn":"z"}],"corrected_en":"No."}',
       finishReason: 'stop',
-      quizIndex: 1,
+      sentenceWordId: wordId,
     );
-    final quiz = store.quizSnapshot();
+    final sentences = store.sentenceSnapshot();
     final poster = ScriptPoster([
       Posted(200, '{"ok":true}'),
       Posted(200, _wrap('你好')),
@@ -86,11 +89,11 @@ void main() {
       tokenHubKey: 'hub-key',
     );
     expect(await model.testConnection(), '已连通');
-    expect(store.quizSnapshot(), quiz);
+    expect(store.sentenceSnapshot(), sentences);
     final translated = await model.translate('hello', toChinese: true);
     expect(translated, isNull);
     expect(store.referencePreview, '你好');
-    expect(store.quizSnapshot(), quiz);
+    expect(store.sentenceSnapshot(), sentences);
     expect(poster.calls.last.uri.host, 'tokenhub.tencentmaas.com');
     expect(poster.calls.last.uri.path, '/v1/chat/completions');
     expect(poster.calls.last.body['model'], 'hy-mt2-plus');

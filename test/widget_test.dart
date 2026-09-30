@@ -119,6 +119,18 @@ void main() {
     store.submitVocab('nope');
     store.advanceVocab();
     await tester.pumpWidget(EnglishApp(model: model));
+    expect(find.text('继续造句'), findsOneWidget);
+
+    for (final id in store.scheduledNewWords()) {
+      store.applyModelResponse(
+        task: 'grade_open',
+        content: _passGrade,
+        finishReason: 'stop',
+        sentenceWordId: id,
+      );
+    }
+    model.commit();
+    await tester.pump();
     expect(find.text('继续对话'), findsOneWidget);
 
     store.sceneInFlight = true;
@@ -140,18 +152,6 @@ void main() {
     expect(find.text('继续对话'), findsOneWidget);
 
     store.markDialogueDone();
-    model.commit();
-    await tester.pump();
-    expect(find.text('继续考核'), findsOneWidget);
-
-    for (var i = 0; i < 4; i++) {
-      store.applyModelResponse(
-        task: 'grade_open',
-        content: i == 3 ? _failGrade : _passGrade,
-        finishReason: 'stop',
-        quizIndex: i,
-      );
-    }
     model.commit();
     await tester.pump();
     expect(find.text('回看今天'), findsOneWidget);
@@ -182,7 +182,7 @@ void main() {
     expect(store.progressJson().contains('apiKey'), isFalse);
   });
 
-  testWidgets('quiz corrections use the real grade parser', (tester) async {
+  testWidgets('sentence corrections use the real grade parser', (tester) async {
     final store = fixtureStore(
       clock: () => DateTime(2026, 9, 1),
       levelChosen: true,
@@ -194,15 +194,6 @@ void main() {
     }
     store.submitVocab('nope');
     store.advanceVocab();
-    expect(
-      store.applyModelResponse(
-        task: 'fill_scene',
-        content: _scene,
-        finishReason: 'stop',
-      ),
-      isTrue,
-    );
-    store.markDialogueDone();
     final poster = RecordingPoster();
     poster.responses.add(Posted(200, _wrap(_failGrade)));
     final model = AppModel(
@@ -212,11 +203,12 @@ void main() {
       unlocked: true,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    expect(find.text('继续考核'), findsOneWidget);
-    await tester.tap(find.text('继续考核'));
+    expect(find.text('继续造句'), findsOneWidget);
+    await tester.tap(find.text('继续造句'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('考核'), findsWidgets);
+    expect(find.textContaining('造句'), findsWidgets);
     expect(find.text('发送'), findsOneWidget);
+    final wordId = store.currentSentenceWordId!;
     await tester.enterText(find.byType(TextField).last, 'He go');
     await tester.tap(find.text('发送'));
     await tester.pump();
@@ -229,7 +221,8 @@ void main() {
     expect(call.body['thinking'], {'type': 'disabled'});
     expect(call.body.containsKey('tools'), isFalse);
     expect(call.headers['Authorization'], 'Bearer test-key');
-    expect(store.quizSnapshot()[0], isFalse);
+    expect(store.sentenceSnapshot().firstWhere((e) => e['wordId'] == wordId)['done'], isTrue);
+    expect(store.sentenceSnapshot().firstWhere((e) => e['wordId'] == wordId)['pass'], isFalse);
     expect(store.checkedIn, isFalse);
   });
 

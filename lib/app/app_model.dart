@@ -169,6 +169,17 @@ class AppModel extends ChangeNotifier {
     );
   }
 
+  Future<String?> gradeSentence(String wordId, String answer) {
+    final word = store.word(wordId);
+    final label = word == null ? wordId : '${word.en} / ${word.cn}';
+    return _grade(
+      prompt: store.sentencePrompt(wordId),
+      requiredWords: '必须自然用上这个词：$label',
+      answer: answer,
+      sentenceWordId: wordId,
+    );
+  }
+
   Future<String?> gradeLine({
     required String prompt,
     required String requiredWords,
@@ -236,6 +247,7 @@ class AppModel extends ChangeNotifier {
     required String requiredWords,
     required String answer,
     int? quizIndex,
+    String? sentenceWordId,
   }) async {
     store.lastGrade = null;
     final error = await runTask(
@@ -247,6 +259,7 @@ class AppModel extends ChangeNotifier {
         answer: answer,
       ),
       quizIndex: quizIndex,
+      sentenceWordId: sentenceWordId,
     );
     commit();
     return error;
@@ -257,8 +270,9 @@ class AppModel extends ChangeNotifier {
     required String task,
     required List<Map<String, String>> messages,
     int? quizIndex,
+    String? sentenceWordId,
   }) async {
-    final first = await _once(task, messages, quizIndex);
+    final first = await _once(task, messages, quizIndex, sentenceWordId);
     if (first.accepted) return null;
     if (!first.retry) return first.error;
     final retryMessages = [
@@ -269,7 +283,7 @@ class AppModel extends ChangeNotifier {
             '上一次没有返回合法 JSON。原文如下：\n${_clip(first.raw)}\n请只重发合法 JSON。',
       },
     ];
-    final second = await _once(task, retryMessages, quizIndex);
+    final second = await _once(task, retryMessages, quizIndex, sentenceWordId);
     if (second.accepted) return null;
     return second.error ?? '没有返回合法结果';
   }
@@ -278,6 +292,7 @@ class AppModel extends ChangeNotifier {
     String task,
     List<Map<String, String>> messages,
     int? quizIndex,
+    String? sentenceWordId,
   ) async {
     if (!hasDeepSeekKey) {
       return const _AttemptResult.fail('密钥无效');
@@ -303,6 +318,7 @@ class AppModel extends ChangeNotifier {
           content: reply.content ?? '',
           finishReason: reply.finishReason,
           quizIndex: quizIndex,
+          sentenceWordId: sentenceWordId,
         );
       }
       store.recordCall(

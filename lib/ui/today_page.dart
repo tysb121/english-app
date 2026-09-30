@@ -84,14 +84,14 @@ class _TodayPageState extends State<TodayPage> {
                           icon: Icons.spellcheck_rounded,
                         ),
                         ProgressChip(
+                          label: '造句',
+                          done: store.sentencesDone,
+                          icon: Icons.edit_note_rounded,
+                        ),
+                        ProgressChip(
                           label: '对话',
                           done: store.dialogueDone,
                           icon: Icons.forum_outlined,
-                        ),
-                        ProgressChip(
-                          label: '考核',
-                          done: store.quizGate,
-                          icon: Icons.workspace_premium_outlined,
                         ),
                       ],
                     ),
@@ -134,13 +134,13 @@ class _TodayPageState extends State<TodayPage> {
                   child: TextButton.icon(
                     onPressed: () => _open(context, PracticeKind.errors),
                     icon: const Icon(Icons.replay_circle_filled_outlined),
-                    label: Text('错词 ${plan.errorWordIds.length}（考核后再练）'),
+                    label: Text('错词 ${plan.errorWordIds.length}（对话后再练）'),
                   ),
                 ),
               ],
               const SizedBox(height: 8),
               const Text(
-                '认对后才会显示英文；错词排在考核之后回来练。',
+                '认对后才会显示英文；错词排在短对话之后回来练。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
               const SizedBox(height: 8),

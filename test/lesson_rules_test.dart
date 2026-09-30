@@ -92,16 +92,16 @@ void main() {
     expect(store.checkedIn, isFalse);
     store.markDialogueDone();
     expect(store.checkedIn, isFalse);
-    for (var i = 0; i < 4; i++) {
+    for (final id in first.newWordIds) {
       final accepted = store.applyModelResponse(
         task: 'grade_open',
-        content: i == 3 ? _failGrade : _passGrade,
+        content: _passGrade,
         finishReason: 'stop',
-        quizIndex: i,
+        sentenceWordId: id,
       );
       expect(accepted, isTrue);
     }
-    expect(store.quizPassCount, 3);
+    expect(store.sentencesDone, isTrue);
     expect(store.checkedIn, isTrue);
 
     store.skipNotes();
@@ -121,13 +121,13 @@ void main() {
     expect(store.todayContains('cc_a1_hello_noun_ce4a5e'), isFalse);
 
     final before = store.reviewSnapshot();
-    final quizBefore = store.quizSnapshot();
+    final sentencesBefore = store.sentenceSnapshot();
     expect(
       store.applyModelResponse(
         task: 'grade_open',
         content: '{',
         finishReason: 'stop',
-        quizIndex: 0,
+        sentenceWordId: next.newWordIds.first,
       ),
       isFalse,
     );
@@ -136,12 +136,12 @@ void main() {
         task: 'grade_open',
         content: _passGrade,
         finishReason: 'length',
-        quizIndex: 0,
+        sentenceWordId: next.newWordIds.first,
       ),
       isFalse,
     );
     expect(store.reviewSnapshot(), before);
-    expect(store.quizSnapshot(), quizBefore);
+    expect(store.sentenceSnapshot(), sentencesBefore);
     expect(store.checkedIn, isFalse);
   });
 
@@ -248,17 +248,19 @@ void main() {
     expect(store.scene!.scenarioEn, 'Hello');
     expect(store.reviewSnapshot(), before);
 
-    final quizBefore = store.quizSnapshot();
+    final wordId = store.scheduledNewWords().first;
+    final sentencesBefore = store.sentenceSnapshot();
     expect(
       store.applyModelResponse(
         task: 'grade_open',
         content: '{"pass":false,"errors":[],"corrected_en":"Ok."}',
         finishReason: 'stop',
-        quizIndex: 0,
+        sentenceWordId: wordId,
       ),
       isTrue,
     );
-    expect(store.quizSnapshot()[0], isTrue);
+    expect(store.sentenceSnapshot().first['done'], isTrue);
+    expect(store.sentenceSnapshot().first['pass'], isTrue);  // empty errors => pass
     expect(
       store.applyModelResponse(
         task: 'explain',
@@ -267,7 +269,7 @@ void main() {
       ),
       isTrue,
     );
-    expect(store.quizSnapshot().sublist(1), quizBefore.sublist(1));
+    expect(store.sentenceSnapshot().sublist(1), sentencesBefore.sublist(1));
     expect(store.checkedIn, isFalse);
   });
 
@@ -300,16 +302,17 @@ void main() {
 
     final store = fixtureStore(clock: () => DateTime(2026, 6, 1));
     store.ensureTodayPlan();
+    final wordId = store.scheduledNewWords()[1];
     store.applyModelResponse(
       task: 'grade_open',
       content: _failGrade,
       finishReason: 'stop',
-      quizIndex: 1,
+      sentenceWordId: wordId,
     );
-    final quiz = store.quizSnapshot();
+    final sentences = store.sentenceSnapshot();
     store.applyTranslation('你好');
     expect(store.referencePreview, '你好');
-    expect(store.quizSnapshot(), quiz);
+    expect(store.sentenceSnapshot(), sentences);
   });
 
   test('saved progress reloads the plan and keeps keys out', () {
@@ -424,21 +427,17 @@ void _checkIn(LessonStore store) {
     _answerCurrent(store, correctly: true);
   }
   store.submitVocab('wrong');
-  store.markDialogueDone();
-  for (var i = 0; i < 3; i++) {
+  store.advanceVocab();
+  expect(store.vocabThresholdMet, isTrue);
+  for (final id in store.scheduledNewWords()) {
     store.applyModelResponse(
       task: 'grade_open',
       content: _passGrade,
       finishReason: 'stop',
-      quizIndex: i,
+      sentenceWordId: id,
     );
   }
-  store.applyModelResponse(
-    task: 'grade_open',
-    content: _failGrade,
-    finishReason: 'stop',
-    quizIndex: 3,
-  );
+  store.markDialogueDone();
   expect(store.checkedIn, isTrue);
 }
 

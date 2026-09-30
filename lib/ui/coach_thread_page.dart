@@ -7,7 +7,7 @@ import 'english_app.dart';
 import 'theme.dart';
 import 'thinking_panel.dart';
 
-/// Single coach thread: vocab → scene → dialogue → quiz → errors → notes.
+/// Single coach thread: vocab → sentences → scene → dialogue → errors → notes.
 class CoachThreadPage extends StatefulWidget {
   const CoachThreadPage({super.key, this.readOnly = false});
 
@@ -178,12 +178,12 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     switch (stage) {
       case _Stage.vocab:
         return [_vocabBlock(model, store)];
+      case _Stage.sentences:
+        return [_sentencesBlock(model, store)];
       case _Stage.scene:
         return [_sceneBlock(model, sceneLoading: sceneLoading)];
       case _Stage.dialogue:
         return [_dialogueBlock(store)];
-      case _Stage.quiz:
-        return [_quizBlock(model, store)];
       case _Stage.errors:
         return [_errorsBlock(model, store)];
       case _Stage.notes:
@@ -310,51 +310,38 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     );
   }
 
-  Widget _quizBlock(AppModel model, LessonStore store) {
-    final passed = store.quizPassCount;
-    final index = store.openQuizIndex;
-    if (index == null) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '考核进度 $passed/4',
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-          ),
-          Text(
-            passed >= 3 ? '已达到打卡所需的 3 题。' : '还需通过 ${3 - passed} 题才能点亮考核。',
-            style: const TextStyle(color: Color(0xFF4E4A43)),
-          ),
-          if (passed < 3)
-            FilledButton(
-              onPressed: () {
-                store.redoFailedQuiz();
-                model.commit();
-                setState(() {});
-              },
-              child: const Text('重做未过的题'),
-            ),
-        ],
-      );
-    }
+  Widget _sentencesBlock(AppModel model, LessonStore store) {
+    final plan = store.ensureTodayPlan();
+    final total = plan.newWordIds.length;
+    final done = store.sentenceDoneCount;
+    final wordId = store.currentSentenceWordId;
+    final word = wordId == null ? null : store.word(wordId);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          '考核 ${index + 1}/4',
+          '造句 ${done.clamp(0, total)}/$total',
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
-        Text(
-          '已通过 $passed/4（至少 3 题通过才算完成考核）',
-          style: const TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+        const Text(
+          '每个新词造一句；批改后才算做完，不能跳过。',
+          style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
         ),
         const SizedBox(height: 8),
-        Text(store.quizPrompt(index)),
-        const SizedBox(height: 8),
-        const Text('在底部输入框作答并发送。'),
+        if (wordId != null) ...[
+          Text(store.sentencePrompt(wordId)),
+          if (word != null)
+            Text(
+              '${word.en} · ${word.cn} · ${word.pos}',
+              style: const TextStyle(color: Color(0xFF4E4A43)),
+            ),
+          const SizedBox(height: 8),
+          const Text('在底部输入框造句并发送。'),
+        ] else
+          const Text('今天的造句已做完。'),
         if (!model.hasDeepSeekKey) ...[
           const SizedBox(height: 8),
-          _keyCta('考核批改需要 DeepSeek 密钥。'),
+          _keyCta('造句批改需要 DeepSeek 密钥。'),
         ],
       ],
     );
@@ -370,7 +357,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           style: TextStyle(fontWeight: FontWeight.w600),
         ),
         const Text(
-          '这些是认错或到期的词，排在考核之后再练。',
+          '这些是认错或到期的词，排在短对话之后再练。',
           style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
         ),
         const SizedBox(height: 8),
@@ -468,7 +455,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     }
     model.commit();
     if (!store.vocabThresholdMet) {
-      _status = '认词未到通过线。错的明天再出现；对话和考核仍可继续，今天不打卡。';
+      _status = '认词未到通过线。错的明天再出现；造句和对话仍可继续，今天不打卡。';
     }
     setState(() => _busy = false);
   }
@@ -494,7 +481,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     if (text.isEmpty) return;
     final store = model.store;
     if (!model.hasDeepSeekKey &&
-        (stage == _Stage.dialogue || stage == _Stage.quiz)) {
+        (stage == _Stage.dialogue || stage == _Stage.sentences)) {
       setState(() {
         _status = '需要 DeepSeek 密钥才能批改。关闭后到「我的」填写。';
         _retry = null;
@@ -505,11 +492,13 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       _busy = true;
       _status = null;
     });
-    if (stage == _Stage.quiz) {
-      final index = store.openQuizIndex;
-      if (index != null) {
+    if (stage == _Stage.sentences) {
+      final wordId = store.currentSentenceWordId;
+      if (wordId != null) {
+        final total = store.ensureTodayPlan().newWordIds.length;
+        final ordinal = store.sentenceDoneCount + 1;
         _local.add(_Bubble(role: _BubbleRole.user, text: text));
-        final err = await model.gradeQuiz(index, text);
+        final err = await model.gradeSentence(wordId, text);
         _controller.clear();
         if (err != null) {
           _status = err;
@@ -525,8 +514,8 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
               _Bubble(
                 role: _BubbleRole.coach,
                 text: grade.pass
-                    ? '✓ 通过（考核 ${index + 1}/4）\n${grade.correctedEn}'
-                    : '✗ 未通过（考核 ${index + 1}/4）\n'
+                    ? '✓ 通过（造句 $ordinal/$total）\n${grade.correctedEn}'
+                    : '✗ 未通过（造句 $ordinal/$total，仍算做完）\n'
                         '${grade.errors.take(2).map((e) => '${e.excerpt} → ${e.fix}（${e.whyCn}）').join('\n')}\n'
                         '改写：${grade.correctedEn}',
               ),
@@ -622,17 +611,17 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   _Stage _stage(LessonStore store) {
     final plan = store.ensureTodayPlan();
     if (!store.vocabThresholdMet) return _Stage.vocab;
+    if (!store.sentencesDone) return _Stage.sentences;
     if (plan.scene == null) return _Stage.scene;
     if (!plan.dialogueDone) return _Stage.dialogue;
-    if (!store.quizGate) return _Stage.quiz;
     if (plan.errorWordIds.isNotEmpty) return _Stage.errors;
     if (!store.notesDismissed) return _Stage.notes;
     return _Stage.done;
   }
 
   bool _allowsInput(_Stage stage) =>
+      stage == _Stage.sentences ||
       stage == _Stage.dialogue ||
-      stage == _Stage.quiz ||
       stage == _Stage.errors ||
       stage == _Stage.notes ||
       stage == _Stage.done;
@@ -645,7 +634,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 }
 
-enum _Stage { vocab, scene, dialogue, quiz, errors, notes, done }
+enum _Stage { vocab, sentences, scene, dialogue, errors, notes, done }
 
 enum _BubbleRole { user, coach }
 

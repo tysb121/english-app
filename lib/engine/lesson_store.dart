@@ -196,6 +196,8 @@ class DayPlan {
   LessonScene? scene;
   bool dialogueDone;
   final List<bool?> quiz;
+  /// Per new-word sentence grade (presence = done; value = pass).
+  final Map<String, bool> sentenceResults = {};
   int vocabCursor;
   int dialogueCursor = 0;
   int errorCursor = 0;
@@ -598,6 +600,40 @@ class LessonStore {
 
   bool get dialogueDone => ensureTodayPlan().dialogueDone;
 
+  bool get sentencesDone {
+    final plan = ensureTodayPlan();
+    if (plan.newWordIds.isEmpty) return false;
+    return plan.newWordIds.every(plan.sentenceResults.containsKey);
+  }
+
+  String? get currentSentenceWordId {
+    final plan = ensureTodayPlan();
+    for (final id in plan.newWordIds) {
+      if (!plan.sentenceResults.containsKey(id)) return id;
+    }
+    return null;
+  }
+
+  int get sentenceDoneCount => ensureTodayPlan().sentenceResults.length;
+
+  String sentencePrompt(String wordId) {
+    final word = _words[wordId];
+    if (word == null) return '用今天的一个新词造一句英文。';
+    return '用「${word.en}」（${word.cn}）造一句英文。';
+  }
+
+  List<Map<String, Object?>> sentenceSnapshot() {
+    final plan = ensureTodayPlan();
+    return [
+      for (final id in plan.newWordIds)
+        {
+          'wordId': id,
+          'done': plan.sentenceResults.containsKey(id),
+          'pass': plan.sentenceResults[id],
+        },
+    ];
+  }
+
   int get quizPassCount =>
       ensureTodayPlan().quiz.where((item) => item == true).length;
 
@@ -607,7 +643,7 @@ class LessonStore {
     return quiz.where((item) => item == true).length >= 3;
   }
 
-  bool get checkedIn => vocabThresholdMet && dialogueDone && quizGate;
+  bool get checkedIn => vocabThresholdMet && sentencesDone && dialogueDone;
 
   void skipNotes() {
     final plan = ensureTodayPlan();
@@ -684,6 +720,7 @@ class LessonStore {
     required String content,
     required String? finishReason,
     int? quizIndex,
+    String? sentenceWordId,
   }) {
     if (finishReason != 'stop') return false;
     final json = _decodeObject(content);
@@ -710,6 +747,11 @@ class LessonStore {
           if (plan.gradeNotes.length > 5) {
             plan.gradeNotes.removeRange(0, plan.gradeNotes.length - 5);
           }
+        }
+        if (sentenceWordId != null &&
+            plan.newWordIds.contains(sentenceWordId) &&
+            !plan.sentenceResults.containsKey(sentenceWordId)) {
+          plan.sentenceResults[sentenceWordId] = grade.pass;
         }
         if (quizIndex != null && quizIndex >= 0 && quizIndex < 4) {
           plan.quiz[quizIndex] = grade.pass;
@@ -746,8 +788,8 @@ class LessonStore {
 
   bool _planCheckedIn(DayPlan plan) {
     if (!plan.dialogueDone) return false;
-    if (plan.quiz.any((item) => item == null)) return false;
-    if (plan.quiz.where((item) => item == true).length < 3) return false;
+    if (plan.newWordIds.isEmpty) return false;
+    if (!plan.newWordIds.every(plan.sentenceResults.containsKey)) return false;
     return _vocabMet(plan);
   }
 
@@ -777,9 +819,9 @@ class LessonStore {
       if (attempts.isEmpty) return '开始今天';
       return '继续认词';
     }
+    if (!sentencesDone) return '继续造句';
     if (sceneInFlight && plan.scene == null) return '正在写今天的场景';
     if (!plan.dialogueDone) return '继续对话';
-    if (!quizGate) return '继续考核';
     if (plan.errorWordIds.isNotEmpty) return '还有错词';
     return '回看今天';
   }
@@ -913,6 +955,9 @@ class LessonStore {
             'errorWordIds': plan.errorWordIds,
             'dialogueDone': plan.dialogueDone,
             'quiz': plan.quiz,
+            'sentenceResults': {
+              for (final entry in plan.sentenceResults.entries) entry.key: entry.value,
+            },
             'vocabCursor': plan.vocabCursor,
             'dialogueCursor': plan.dialogueCursor,
             'errorCursor': plan.errorCursor,
@@ -1100,6 +1145,15 @@ class LessonStore {
           for (var i = 0; i < plan.quiz.length && i < quiz.length; i++) {
             final value = quiz[i];
             plan.quiz[i] = value is bool ? value : null;
+          }
+        }
+        final sentences = item['sentenceResults'];
+        if (sentences is Map) {
+          for (final entry in sentences.entries) {
+            final key = entry.key.toString();
+            if (entry.value is bool) {
+              plan.sentenceResults[key] = entry.value as bool;
+            }
           }
         }
         plan.notes.addAll(_notes(item['notes']));
