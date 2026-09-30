@@ -1,0 +1,18 @@
+{
+  "book_id": "cefr_core",
+  "cefr_source_rows_a1_b1": 5021,
+  "unique_en_pos_kept": 5020,
+  "shipped_with_cn": 5020,
+  "missing_cn": 0,
+  "match_rate": 1.0,
+  "per_level": {
+    "a1": 1164,
+    "a2": 1411,
+    "b1": 2445
+  },
+  "cn_sources": {
+    "curated": 46,
+    "ecdict": 4974
+  },
+  "missing_sample": []
+}

@@ -46,3 +46,6 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Large sourced dict dumps used only by build scripts
+/tool/vendor/
