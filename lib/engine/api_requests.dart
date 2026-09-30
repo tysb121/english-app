@@ -1,3 +1,5 @@
+import 'reasoning_effort.dart';
+
 /// HTTP calls the phone makes. Builders only; tests never hit the network.
 class ApiCall {
   final Uri uri;
@@ -136,10 +138,16 @@ ApiCall deepSeekPlainChat({
   String? userId,
   double temperature = 0.4,
   int maxTokens = 800,
+  bool stream = false,
+  String reasoningEffort = 'off',
 }) {
   final root = baseUrl.endsWith('/')
       ? baseUrl.substring(0, baseUrl.length - 1)
       : baseUrl;
+  final thinking = deepSeekThinkingFields(reasoningEffort);
+  final tokens = normalizeReasoningEffort(reasoningEffort) == 'off'
+      ? maxTokens
+      : maxTokens + 800;
   return ApiCall(
     uri: Uri.parse('$root$deepSeekChatPath'),
     headers: {
@@ -149,11 +157,12 @@ ApiCall deepSeekPlainChat({
     body: {
       'model': model,
       'messages': messages,
-      'stream': false,
+      'stream': stream,
+      // Temperature is ignored while thinking is enabled; kept for off mode.
       'temperature': temperature,
-      'max_tokens': maxTokens,
-      'thinking': {'type': 'disabled'},
-      'reasoning_effort': 'none',
+      'max_tokens': tokens,
+      ...thinking,
+      if (stream) 'stream_options': {'include_usage': false},
       if (userId != null && userId.isNotEmpty) 'user_id': userId,
     },
   );

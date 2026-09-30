@@ -5,6 +5,7 @@ import '../engine/chat_message.dart';
 import '../engine/lesson_store.dart';
 import 'english_app.dart';
 import 'theme.dart';
+import 'thinking_panel.dart';
 
 /// Single coach thread: vocab → scene → dialogue → quiz → errors → notes.
 class CoachThreadPage extends StatefulWidget {
@@ -65,14 +66,12 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
                   ),
                 for (final bubble in _local) _bubble(bubble),
                 if (model.chat != null)
-                  for (final message in model.chat!.messages)
-                    _bubble(
-                      _Bubble(
-                        role: message.role == ChatRole.user
-                            ? _BubbleRole.user
-                            : _BubbleRole.coach,
-                        text: message.content,
-                      ),
+                  for (var i = 0; i < model.chat!.messages.length; i++)
+                    CoachAnswerBubble(
+                      mine: model.chat!.messages[i].role == ChatRole.user,
+                      content: model.chat!.messages[i].content,
+                      reasoning: model.chat!.messages[i].reasoning,
+                      streaming: model.chat!.streamingIndex == i,
                     ),
                 ..._stageBody(model, store, stage, sceneLoading: sceneLoading),
                 if (_status != null)
@@ -559,6 +558,13 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       baseUrl: model.deepSeekBase,
       model: model.deepSeekModel,
       installId: store.installId,
+      reasoningEffort: store.reasoningEffort,
+      onUpdate: () {
+        if (mounted) {
+          model.tick();
+          setState(() {});
+        }
+      },
     );
     _controller.clear();
     if (err != null) {
@@ -589,29 +595,9 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
       stage == _Stage.dialogue || stage == _Stage.quiz;
 
   Widget _bubble(_Bubble bubble) {
-    final mine = bubble.role == _BubbleRole.user;
-    final pass = bubble.text.startsWith('✓');
-    final fail = bubble.text.startsWith('✗');
-    final Color border;
-    if (pass) {
-      border = pine;
-    } else if (fail) {
-      border = wrongRed;
-    } else {
-      border = const Color(0xFFE3DDD2);
-    }
-    return Align(
-      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: mine ? pine.withValues(alpha: 0.12) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: border, width: pass || fail ? 1.4 : 1),
-        ),
-        child: Text(bubble.text, style: const TextStyle(color: ink)),
-      ),
+    return CoachAnswerBubble(
+      mine: bubble.role == _BubbleRole.user,
+      content: bubble.text,
     );
   }
 }

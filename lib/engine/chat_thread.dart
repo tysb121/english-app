@@ -21,15 +21,13 @@ class ChatThread {
   ContextSummary? contextSummary;
   String? lastError;
   bool busy = false;
-  int _seq = 0;
+  /// Index of the assistant bubble currently streaming, if any.
+  int? streamingIndex;
 
   static String _defaultId() =>
       'm${DateTime.now().microsecondsSinceEpoch}';
 
-  String _id() {
-    _seq += 1;
-    return _nextId();
-  }
+  String _id() => _nextId();
 
   Map<String, Object?> toJson() => {
         'messages': [for (final m in messages) m.toJson()],
@@ -40,6 +38,7 @@ class ChatThread {
     messages.clear();
     contextSummary = null;
     lastError = null;
+    streamingIndex = null;
     if (raw is! Map) return;
     final list = raw['messages'];
     if (list is List) {
@@ -59,6 +58,8 @@ class ChatThread {
     required String baseUrl,
     required String model,
     required String installId,
+    String reasoningEffort = 'off',
+    void Function()? onUpdate,
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return '空白不发送';
@@ -72,6 +73,7 @@ class ChatThread {
     lastError = null;
     final user = ChatMessage(id: _id(), role: ChatRole.user, content: trimmed);
     messages.add(user);
+    onUpdate?.call();
     try {
       return await _complete(
         poster: poster,
@@ -79,9 +81,13 @@ class ChatThread {
         baseUrl: baseUrl,
         model: model,
         installId: installId,
+        reasoningEffort: reasoningEffort,
+        onUpdate: onUpdate,
       );
     } finally {
       busy = false;
+      streamingIndex = null;
+      onUpdate?.call();
     }
   }
 
@@ -92,6 +98,8 @@ class ChatThread {
     required String baseUrl,
     required String model,
     required String installId,
+    String reasoningEffort = 'off',
+    void Function()? onUpdate,
   }) async {
     if (busy) return '正在请求';
     if (messages.isEmpty || messages.last.role != ChatRole.user) {
@@ -107,9 +115,13 @@ class ChatThread {
         baseUrl: baseUrl,
         model: model,
         installId: installId,
+        reasoningEffort: reasoningEffort,
+        onUpdate: onUpdate,
       );
     } finally {
       busy = false;
+      streamingIndex = null;
+      onUpdate?.call();
     }
   }
 
@@ -119,6 +131,8 @@ class ChatThread {
     required String baseUrl,
     required String model,
     required String installId,
+    required String reasoningEffort,
+    void Function()? onUpdate,
   }) async {
     var projection = projectContext(
       messages,
@@ -127,6 +141,7 @@ class ChatThread {
       keepUserTurns: keepUserTurns,
     );
 
+    // Summary stays non-stream + thinking off so compression stays stable.
     if (projection.needsSummary &&
         projection.summarizeSource != null &&
         projection.cutUserId != null) {
@@ -175,6 +190,8 @@ class ChatThread {
       baseUrl: baseUrl,
       model: model,
       userId: installId,
+      stream: true,
+      reasoningEffort: reasoningEffort,
     );
 
     String? fail(String reason) {
@@ -182,71 +199,72 @@ class ChatThread {
       return reason;
     }
 
-    Future<Posted?> once() async {
-      try {
-        return await poster.send(call);
-      } on Object {
-        return null;
-      }
-    }
-
-    var posted = await once();
-    if (posted == null) {
-      posted = await once();
-      if (posted == null) return fail('服务暂时不可用');
-    }
-
-    bool autoRetryable(int status) =>
-        status == 0 || status == 500 || status == 503 || status == 200;
-
-    if (posted.status != 200) {
-      if (autoRetryable(posted.status) &&
-          posted.status != 401 &&
-          posted.status != 402 &&
-          posted.status != 400 &&
-          posted.status != 422 &&
-          posted.status != 429) {
-        final again = await once();
-        if (again != null) posted = again;
-      }
-      if (posted!.status != 200) {
-        return fail(deepSeekStatusText(posted.status));
-      }
-    }
-
-    final reply = parseChatReply(posted.body);
-    if (reply == null || reply.content == null || reply.content!.trim().isEmpty) {
-      final again = await once();
-      if (again != null && again.status == 200) {
-        final second = parseChatReply(again.body);
-        if (second != null &&
-            second.finishReason == 'stop' &&
-            second.content != null &&
-            second.content!.trim().isNotEmpty) {
-          messages.add(
-            ChatMessage(
-              id: _id(),
-              role: ChatRole.assistant,
-              content: second.content!.trim(),
-            ),
-          );
-          lastError = null;
-          return null;
-        }
-      }
-      return fail('服务暂时不可用');
-    }
-    if (reply.finishReason != 'stop') {
-      return fail('服务暂时不可用');
-    }
-
-    messages.add(
-      ChatMessage(
-        id: _id(),
-        role: ChatRole.assistant,
-        content: reply.content!.trim(),
-      ),
+    final assistant = ChatMessage(
+      id: _id(),
+      role: ChatRole.assistant,
+      content: '',
+      reasoning: '',
     );
+    messages.add(assistant);
+    streamingIndex = messages.length - 1;
+    onUpdate?.call();
+
+    var content = '';
+    var reasoning = '';
+    String? finish;
+    var sawError = false;
+    String? errText;
+
+    try {
+      await for (final event in openChatStream(poster, call)) {
+        if (event.isError) {
+          sawError = true;
+          errText = event.errorMessage ??
+              deepSeekStatusText(event.httpStatus ?? 0);
+          break;
+        }
+        if (event.reasoningDelta != null) {
+          reasoning += event.reasoningDelta!;
+        }
+        if (event.contentDelta != null) {
+          content += event.contentDelta!;
+        }
+        if (event.finishReason != null) {
+          finish = event.finishReason;
+        }
+        messages[streamingIndex!] = assistant.copyWith(
+          content: content,
+          reasoning: reasoning,
+        );
+        onUpdate?.call();
+      }
+    } on Object {
+      sawError = true;
+      errText = '服务暂时不可用';
+    }
+
+    if (sawError || content.trim().isEmpty) {
+      // Remove empty / partial assistant on hard failure; keep partial if any content.
+      if (content.trim().isEmpty) {
+        if (streamingIndex != null &&
+            streamingIndex! >= 0 &&
+            streamingIndex! < messages.length &&
+            messages[streamingIndex!].id == assistant.id) {
+          messages.removeAt(streamingIndex!);
+        }
+        streamingIndex = null;
+        return fail(errText ?? '服务暂时不可用');
+      }
+    }
+
+    messages[streamingIndex!] = assistant.copyWith(
+      content: content.trim(),
+      reasoning: reasoning.trim(),
+    );
+    streamingIndex = null;
+    if (finish != null && finish != 'stop' && content.trim().isEmpty) {
+      return fail('服务暂时不可用');
+    }
     lastError = null;
     return null;
   }

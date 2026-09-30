@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../app/app_model.dart';
 import '../engine/lesson_store.dart';
+import '../engine/reasoning_effort.dart';
 import 'english_app.dart';
 import 'theme.dart';
 
@@ -225,6 +226,23 @@ class _SettingsPageState extends State<SettingsPage> {
                 store.tone = value;
                 model.commit();
               },
+            ),
+            const SizedBox(height: 16),
+            const Text('思考强度'),
+            const SizedBox(height: 8),
+            _choices<String>(
+              values: reasoningEfforts,
+              label: reasoningEffortLabel,
+              selected: normalizeReasoningEffort(store.reasoningEffort),
+              onPick: (value) {
+                store.reasoningEffort = normalizeReasoningEffort(value);
+                model.commit();
+              },
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '关闭则不展示思考过程。中/高会调用 DeepSeek thinking（medium 按接口映射为 high）。',
+              style: TextStyle(color: ink, fontSize: 12),
             ),
           ],
           const SizedBox(height: 28),

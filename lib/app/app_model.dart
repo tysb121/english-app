@@ -58,6 +58,9 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// UI-only refresh (e.g. stream tokens) without rewriting progress.
+  void tick() => notifyListeners();
+
   void unlock() {
     if (!hasDeepSeekKey) return;
     unlocked = true;

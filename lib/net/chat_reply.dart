@@ -2,10 +2,16 @@ import 'dart:convert';
 
 class ChatReply {
   final String? content;
+  final String? reasoningContent;
   final String? finishReason;
   final int? tokens;
 
-  const ChatReply({this.content, this.finishReason, this.tokens});
+  const ChatReply({
+    this.content,
+    this.reasoningContent,
+    this.finishReason,
+    this.tokens,
+  });
 }
 
 ChatReply? parseChatReply(String raw) {
@@ -21,6 +27,9 @@ ChatReply? parseChatReply(String raw) {
     final first = choices.first as Map;
     final message = first['message'];
     final content = message is Map ? message['content'] : null;
+    final reasoning = message is Map
+        ? (message['reasoning_content'] ?? message['reasoning'])
+        : null;
     final reason = first['finish_reason'];
     final usage = decoded['usage'];
     int? tokens;
@@ -30,6 +39,7 @@ ChatReply? parseChatReply(String raw) {
     }
     return ChatReply(
       content: content is String ? content : null,
+      reasoningContent: reasoning is String ? reasoning : null,
       finishReason: reason is String ? reason : null,
       tokens: tokens,
     );

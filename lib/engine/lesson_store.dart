@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import '../data/seed_words.dart';
+import 'reasoning_effort.dart';
 
 DateTime dateOnly(DateTime value) =>
     DateTime(value.year, value.month, value.day);
@@ -241,6 +242,7 @@ class LessonStore {
   int dailyWords = 5;
   String level = '简单工作对话';
   bool levelChosen = false;
+  String reasoningEffort = 'off';
   String goal = '职场';
   String tone = '简洁';
   bool sceneInFlight = false;
@@ -856,6 +858,7 @@ class LessonStore {
       'dailyWords': dailyWords,
       'level': level,
       'levelChosen': levelChosen,
+      'reasoningEffort': reasoningEffort,
       'goal': goal,
       'tone': tone,
       'userWords': [
@@ -987,6 +990,9 @@ class LessonStore {
     } else if (levels.contains(json['level'])) {
       // Returning users who already had a level saved are treated as chosen.
       levelChosen = true;
+    }
+    if (json['reasoningEffort'] is String) {
+      reasoningEffort = normalizeReasoningEffort(json['reasoningEffort'] as String);
     }
     if (goals.contains(json['goal'])) goal = json['goal'] as String;
     if (tones.contains(json['tone'])) tone = json['tone'] as String;
