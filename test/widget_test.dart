@@ -112,12 +112,11 @@ void main() {
       unlocked: true,
     );
     store.ensureTodayPlan();
-    for (var i = 0; i < 4; i++) {
-      store.submitVocab(store.word(store.currentVocabId!)!.en);
+    final n = store.requiredTodayPlan.newWordIds.length;
+    for (var i = 0; i < n; i++) {
+      store.acknowledgeVocab();
       store.advanceVocab();
     }
-    store.submitVocab('nope');
-    store.advanceVocab();
     await tester.pumpWidget(EnglishApp(model: model));
     expect(find.text('继续造句'), findsOneWidget);
 
@@ -158,7 +157,7 @@ void main() {
     expect(store.checkedIn, isTrue);
   });
 
-  testWidgets('认词 accepts a padded answer with no network', (tester) async {
+  testWidgets('认词 shows gloss and advances with 认识了 offline', (tester) async {
     final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
     final poster = RecordingPoster();
     final model = AppModel(
@@ -170,15 +169,16 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
+    expect(find.text('hello'), findsOneWidget);
     expect(find.text('喂；嘿'), findsOneWidget);
-    expect(find.text('提交认词'), findsOneWidget);
-    final fields = find.byType(TextField);
-    await tester.enterText(fields.at(0), '  HELLO  ');
-    await tester.tap(find.text('提交认词'));
+    expect(find.text('名词'), findsOneWidget);
+    expect(find.text('认识了'), findsOneWidget);
+    expect(find.text('提交认词'), findsNothing);
+    await tester.tap(find.text('认识了'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('hello'), findsWidgets);
     expect(poster.calls, isEmpty);
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(store.vocabSeen('cc_a1_hello_noun_ce4a5e'), isTrue);
     expect(store.progressJson().contains('apiKey'), isFalse);
   });
 
@@ -188,12 +188,11 @@ void main() {
       levelChosen: true,
     );
     store.ensureTodayPlan();
-    for (var i = 0; i < 4; i++) {
-      store.submitVocab(store.word(store.currentVocabId!)!.en);
+    final n = store.requiredTodayPlan.newWordIds.length;
+    for (var i = 0; i < n; i++) {
+      store.acknowledgeVocab();
       store.advanceVocab();
     }
-    store.submitVocab('nope');
-    store.advanceVocab();
     final poster = RecordingPoster();
     poster.responses.add(Posted(200, _wrap(_failGrade)));
     final model = AppModel(
@@ -262,7 +261,7 @@ void main() {
     expect(find.text('开始今天'), findsOneWidget);
   });
 
-  testWidgets('closing 认词 shows the saved result without grading again', (
+  testWidgets('closing 认词 keeps progress and resumes on the next card', (
     tester,
   ) async {
     final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
@@ -276,10 +275,8 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), '  HELLO  ');
-    await tester.tap(find.text('提交认词'));
+    await tester.tap(find.text('认识了'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('hello'), findsWidgets);
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
 
@@ -289,7 +286,8 @@ void main() {
 
     await tester.tap(find.text('继续认词'));
     await tester.pumpAndSettle();
-    expect(find.text('提交认词'), findsOneWidget);
+    expect(find.text('认识了'), findsOneWidget);
+    expect(find.text('hello'), findsNothing);
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
     expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
     expect(poster.calls, isEmpty);

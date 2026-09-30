@@ -20,7 +20,6 @@ class CoachThreadPage extends StatefulWidget {
 
 class _CoachThreadPageState extends State<CoachThreadPage> {
   final _controller = TextEditingController();
-  final Map<String, TextEditingController> _vocabInputs = {};
   final List<_Bubble> _local = [];
   String? _status;
   bool _busy = false;
@@ -29,9 +28,6 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   @override
   void dispose() {
     _controller.dispose();
-    for (final controller in _vocabInputs.values) {
-      controller.dispose();
-    }
     super.dispose();
   }
 
@@ -245,30 +241,49 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
   }
 
   Widget _vocabBlock(AppModel model, LessonStore store) {
-    final ids = store.vocabQueue(store.requiredTodayPlan);
+    final plan = store.requiredTodayPlan;
+    final queue = store.vocabQueue(plan);
+    final total = queue.length;
+    final id = store.currentVocabId;
+    final word = id == null ? null : store.word(id);
+    final doneCount = plan.vocabCursor.clamp(0, total);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Text(
+          '认词 ${doneCount.clamp(0, total)}/$total',
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
         const Text(
-          '用英文写出下面的说法（本地比对，忽略大小写）',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          '看一眼今天的词：英文、中文和词性。不用默写。',
+          style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
         ),
-        const SizedBox(height: 12),
-        for (final id in ids) ...[
-          Text(store.word(id)?.cn ?? id),
-          TextField(
-            controller: _vocabInputs.putIfAbsent(id, TextEditingController.new),
-            enabled: !widget.readOnly && !_busy,
-            decoration: const InputDecoration(hintText: '英文'),
+        const SizedBox(height: 16),
+        if (word == null)
+          const Text('今天的词都看过了。')
+        else ...[
+          Text(
+            word.en,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+          Text(
+            word.cn,
+            style: const TextStyle(fontSize: 18, color: Color(0xFF4E4A43)),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            posLabelZh(word.pos),
+            style: const TextStyle(fontSize: 14, color: Color(0xFF4E4A43)),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: widget.readOnly || _busy
+                ? null
+                : () => _acknowledgeVocab(model, store),
+            child: const Text('认识了'),
+          ),
         ],
-        FilledButton(
-          onPressed: widget.readOnly || _busy
-              ? null
-              : () => _submitVocab(model, store, ids),
-          child: const Text('提交认词'),
-        ),
       ],
     );
   }
@@ -324,7 +339,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
         ),
         const Text(
-          '每个新词造一句；批改后才算做完，不能跳过。',
+          '刚看过的词，用它写一句；批改后才算做完，不能跳过。',
           style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
         ),
         const SizedBox(height: 8),
@@ -420,44 +435,22 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     );
   }
 
-  Future<void> _submitVocab(
-    AppModel model,
-    LessonStore store,
-    List<String> ids,
-  ) async {
+  void _acknowledgeVocab(AppModel model, LessonStore store) {
+    final feedback = store.acknowledgeVocab();
+    if (feedback != null) {
+      _local.add(
+        _Bubble(
+          role: _BubbleRole.coach,
+          text: '已看过 ${feedback.correctEn}',
+        ),
+      );
+    }
+    store.advanceVocab();
+    model.commit();
     setState(() {
-      _busy = true;
       _status = null;
       _retry = null;
     });
-    for (final id in ids) {
-      var guard = 0;
-      while (store.currentVocabId != null &&
-          store.currentVocabId != id &&
-          guard < 40) {
-        store.advanceVocab();
-        guard += 1;
-      }
-      if (store.currentVocabId != id) continue;
-      final answer = _vocabInputs[id]?.text ?? '';
-      final feedback = store.submitVocab(answer);
-      if (feedback != null) {
-        _local.add(
-          _Bubble(
-            role: _BubbleRole.coach,
-            text: feedback.correct
-                ? '✓ ${feedback.correctEn}'
-                : '✗ 正确是 ${feedback.correctEn}',
-          ),
-        );
-      }
-      store.advanceVocab();
-    }
-    model.commit();
-    if (!store.vocabThresholdMet) {
-      _status = '认词未到通过线。错的明天再出现；造句和对话仍可继续，今天不打卡。';
-    }
-    setState(() => _busy = false);
   }
 
   Future<void> _fillScene(AppModel model) async {
@@ -610,7 +603,7 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
 
   _Stage _stage(LessonStore store) {
     final plan = store.requiredTodayPlan;
-    if (!store.vocabThresholdMet) return _Stage.vocab;
+    if (store.currentVocabId != null || !store.vocabDone) return _Stage.vocab;
     if (!store.sentencesDone) return _Stage.sentences;
     if (plan.scene == null) return _Stage.scene;
     if (!plan.dialogueDone) return _Stage.dialogue;

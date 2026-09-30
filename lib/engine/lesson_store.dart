@@ -28,6 +28,7 @@ DateTime addDays(DateTime value, int days) {
   return DateTime(day.year, day.month, day.day + days);
 }
 
+/// Legacy 80% pass helper; daily 认词 no longer uses an accuracy threshold.
 int vocabPassThreshold(int newWordCount) => (newWordCount * 8 + 9) ~/ 10;
 
 String normalizeAnswer(String value) => value.trim().toLowerCase();
@@ -564,6 +565,7 @@ class LessonStore {
     upgradeNudgeDismissed = true;
   }
 
+  /// Today's 认词 cards: new words first, then due review words (no dictation).
   List<String> vocabQueue(DayPlan plan) => [
     ...plan.newWordIds,
     ...plan.reviewWordIds,
@@ -574,12 +576,6 @@ class LessonStore {
     final queue = vocabQueue(plan);
     if (plan.vocabCursor >= 0 && plan.vocabCursor < queue.length) {
       return queue[plan.vocabCursor];
-    }
-    if (vocabThresholdMet) return null;
-    final attempts = _attempts[_key(plan.date)] ?? [];
-    for (final id in plan.newWordIds) {
-      final own = attempts.where((item) => item.wordId == id).toList();
-      if (own.isEmpty || !own.last.correct) return id;
     }
     return null;
   }
@@ -602,6 +598,42 @@ class LessonStore {
     );
   }
 
+  /// Mark the current 认词 card as seen (English + gloss shown; no typing).
+  /// Advances the 2/4/8 success review schedule; does not enter the error queue.
+  VocabFeedback? acknowledgeVocab() {
+    final plan = ensureTodayPlan();
+    final id = currentVocabId;
+    if (id == null) return null;
+    final lexeme = _words[id]!;
+    final already =
+        plan.heldVocabId == id && plan.heldVocabCursor == plan.vocabCursor;
+    if (already) {
+      return VocabFeedback(
+        wordId: id,
+        correct: true,
+        correctEn: lexeme.en,
+      );
+    }
+    _attempts.putIfAbsent(_key(plan.date), () => []).add(
+      _Attempt(id, lexeme.en, true),
+    );
+    if (_isActiveError(id)) {
+      _advanceError(id, today);
+    } else {
+      _advanceSuccess(id, today);
+    }
+    plan.heldVocabId = id;
+    plan.heldVocabCursor = plan.vocabCursor;
+    plan.heldVocabCorrect = true;
+    return VocabFeedback(
+      wordId: id,
+      correct: true,
+      correctEn: lexeme.en,
+    );
+  }
+
+  /// Legacy typed 中→英 compare. Kept for leftover error-queue tests / optional
+  /// review paths; daily 认词 uses [acknowledgeVocab] instead.
   VocabFeedback? submitVocab(String answer) {
     final plan = ensureTodayPlan();
     final id = currentVocabId;
@@ -648,20 +680,14 @@ class LessonStore {
     plan.heldVocabCorrect = false;
   }
 
-  bool get vocabThresholdMet {
+  /// 认词 done: every today's new word has been acknowledged (no accuracy bar).
+  bool get vocabDone {
     final plan = ensureTodayPlan();
-    final ids = plan.newWordIds;
-    if (ids.isEmpty) return false;
-    var lastCorrect = 0;
-    for (final id in ids) {
-      final attempts = (_attempts[_key(plan.date)] ?? [])
-          .where((item) => item.wordId == id)
-          .toList();
-      if (attempts.isEmpty) return false;
-      if (attempts.last.correct) lastCorrect += 1;
-    }
-    return lastCorrect >= vocabPassThreshold(ids.length);
+    return _vocabMet(plan);
   }
+
+  /// Alias kept for older call sites / chips.
+  bool get vocabThresholdMet => vocabDone;
 
   bool _isActiveError(String id) {
     final item = _errors[id];
@@ -814,8 +840,8 @@ class LessonStore {
 
   String sentencePrompt(String wordId) {
     final word = _words[wordId];
-    if (word == null) return '用今天的一个新词造一句英文。';
-    return '用「${word.en}」（${word.cn}）造一句英文。';
+    if (word == null) return '刚看过的词，用它写一句。';
+    return '刚看过的词，用「${word.en}」（${word.cn}）写一句。';
   }
 
   List<Map<String, Object?>> sentenceSnapshot() {
@@ -830,7 +856,7 @@ class LessonStore {
     ];
   }
 
-  bool get checkedIn => vocabThresholdMet && sentencesDone && dialogueDone;
+  bool get checkedIn => vocabDone && sentencesDone && dialogueDone;
 
   void skipNotes() {
     final plan = ensureTodayPlan();
@@ -984,14 +1010,11 @@ class LessonStore {
   bool _vocabMet(DayPlan plan) {
     final ids = plan.newWordIds;
     if (ids.isEmpty) return false;
-    var lastCorrect = 0;
     final attempts = _attempts[_key(plan.date)] ?? [];
     for (final id in ids) {
-      final own = attempts.where((item) => item.wordId == id).toList();
-      if (own.isEmpty) return false;
-      if (own.last.correct) lastCorrect += 1;
+      if (!attempts.any((item) => item.wordId == id)) return false;
     }
-    return lastCorrect >= vocabPassThreshold(ids.length);
+    return true;
   }
 
   bool vocabSeen(String wordId) {
@@ -1002,7 +1025,7 @@ class LessonStore {
   String homeActionLabel() {
     final plan = ensureTodayPlan();
     if (checkedIn) return '回看今天';
-    if (!vocabThresholdMet) {
+    if (!vocabDone) {
       final attempts = _attempts[_key(plan.date)] ?? [];
       if (attempts.isEmpty) return '开始今天';
       return '继续认词';

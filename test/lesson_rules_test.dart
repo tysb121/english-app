@@ -169,16 +169,18 @@ void main() {
 
     for (var i = 0; i < 4; i++) {
       final id = store.currentVocabId!;
-      final word = store.word(id)!;
-      final feedback = store.submitVocab('  ${word.en.toUpperCase()}  ');
+      final feedback = store.acknowledgeVocab();
       expect(feedback!.correct, isTrue);
+      expect(feedback.wordId, id);
       store.advanceVocab();
     }
+    // Leftover typed 中→英 can still seed the error queue; daily UI uses 认识了.
     final wrongId = store.currentVocabId!;
     final wrong = store.submitVocab('nope');
     expect(wrong!.correct, isFalse);
     expect(store.nextErrorReview(wrongId), DateTime(2026, 1, 2));
     store.advanceVocab();
+    expect(store.vocabDone, isTrue);
     expect(store.vocabThresholdMet, isTrue);
     expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
 
@@ -307,7 +309,24 @@ void main() {
 
   test('notes confirm stores text and check-in stays', () {
     final store = fixtureStore(clock: () => DateTime(2026, 4, 1));
-    _checkIn(store);
+    store.ensureTodayPlan();
+    // Leftover typed miss seeds a draft; daily 认词 no longer creates errors.
+    store.submitVocab('wrong');
+    store.advanceVocab();
+    while (store.currentVocabId != null) {
+      store.acknowledgeVocab();
+      store.advanceVocab();
+    }
+    for (final id in store.scheduledNewWords()) {
+      store.applyModelResponse(
+        task: 'grade_open',
+        content: _passGrade,
+        finishReason: 'stop',
+        sentenceWordId: id,
+      );
+    }
+    store.markDialogueDone();
+    expect(store.checkedIn, isTrue);
     store.confirmNotes(store.noteDrafts());
     expect(store.savedNotes, isNotEmpty);
     expect(store.checkedIn, isTrue);
@@ -538,32 +557,18 @@ void _reviewError(LessonStore store, String id, {required bool correctly}) {
 
 void _answerCurrent(LessonStore store, {required bool correctly}) {
   final id = store.currentVocabId!;
-  final word = store.word(id)!;
-  final feedback = store.submitVocab(correctly ? word.en : 'wrong');
-  expect(feedback!.wordId, id);
-  expect(feedback.correct, correctly);
+  if (correctly) {
+    final feedback = store.acknowledgeVocab();
+    expect(feedback!.wordId, id);
+    expect(feedback.correct, isTrue);
+  } else {
+    final feedback = store.submitVocab('wrong');
+    expect(feedback!.wordId, id);
+    expect(feedback.correct, isFalse);
+  }
   store.advanceVocab();
 }
 
-void _checkIn(LessonStore store) {
-  store.ensureTodayPlan();
-  for (var i = 0; i < 4; i++) {
-    _answerCurrent(store, correctly: true);
-  }
-  store.submitVocab('wrong');
-  store.advanceVocab();
-  expect(store.vocabThresholdMet, isTrue);
-  for (final id in store.scheduledNewWords()) {
-    store.applyModelResponse(
-      task: 'grade_open',
-      content: _passGrade,
-      finishReason: 'stop',
-      sentenceWordId: id,
-    );
-  }
-  store.markDialogueDone();
-  expect(store.checkedIn, isTrue);
-}
 
 const _passGrade =
     '{"pass":true,"errors":[],"corrected_en":"I said hello."}';

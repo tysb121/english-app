@@ -82,8 +82,8 @@ class _TodayPageState extends State<TodayPage> {
                       children: [
                         ProgressChip(
                           label: '认词',
-                          done: store.vocabThresholdMet,
-                          icon: Icons.spellcheck_rounded,
+                          done: store.vocabDone,
+                          icon: Icons.menu_book_rounded,
                         ),
                         ProgressChip(
                           label: '造句',
@@ -146,7 +146,7 @@ class _TodayPageState extends State<TodayPage> {
               ],
               const SizedBox(height: 8),
               const Text(
-                '认对后才会显示英文；错词排在短对话之后回来练。',
+                '认词只看词卡；造句和短对话才动笔。到期错词排在对话后再练。',
                 style: TextStyle(fontSize: 13, color: muted),
               ),
               const SizedBox(height: 8),
