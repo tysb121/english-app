@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class SavedSecrets {
@@ -18,9 +20,60 @@ class SavedSecrets {
   });
 }
 
+/// Local smoke: skip libsecret/keyring prompts on Linux desktop.
+class _MemoryStorage extends FlutterSecureStorage {
+  static final Map<String, String> _data = <String, String>{};
+
+  const _MemoryStorage() : super();
+
+  @override
+  Future<String?> read({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WindowsOptions? wOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+  }) async =>
+      _data[key];
+
+  @override
+  Future<void> write({
+    required String key,
+    required String? value,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WindowsOptions? wOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+  }) async {
+    if (value == null) {
+      _data.remove(key);
+    } else {
+      _data[key] = value;
+    }
+  }
+
+  @override
+  Future<void> delete({
+    required String key,
+    AppleOptions? iOptions,
+    AndroidOptions? aOptions,
+    LinuxOptions? lOptions,
+    WindowsOptions? wOptions,
+    WebOptions? webOptions,
+    MacOsOptions? mOptions,
+  }) async {
+    _data.remove(key);
+  }
+}
+
 class SecureSecrets {
   SecureSecrets({FlutterSecureStorage? storage})
-    : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ??
+          (Platform.isLinux ? const _MemoryStorage() : const FlutterSecureStorage());
 
   final FlutterSecureStorage _storage;
 
@@ -51,17 +104,20 @@ class SecureSecrets {
   }
 
   Future<String> _read(String key, {String fallback = ''}) async {
-    final value = await _storage.read(key: key);
-    if (value == null || value.trim().isEmpty) return fallback;
-    return value.trim();
+    try {
+      final value = await _storage.read(key: key);
+      if (value == null || value.trim().isEmpty) return fallback;
+      return value.trim();
+    } on Object {
+      return fallback;
+    }
   }
 
   void _write(String key, String value) {
     final trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      _storage.delete(key: key).ignore();
-    } else {
-      _storage.write(key: key, value: trimmed).ignore();
-    }
+    final Future<void> op = trimmed.isEmpty
+        ? _storage.delete(key: key)
+        : _storage.write(key: key, value: trimmed);
+    op.catchError((Object _) {}).ignore();
   }
 }
