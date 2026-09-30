@@ -44,9 +44,25 @@ class RootPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
-    if (!model.store.levelChosen) return const LevelPage();
-    if (!model.unlocked) return const SettingsPage(gate: true);
-    return const HomeShell();
+    final Widget page;
+    if (!model.store.levelChosen) {
+      page = const LevelPage();
+    } else if (!model.unlocked) {
+      page = const SettingsPage(gate: true);
+    } else {
+      page = const HomeShell();
+    }
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 320),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      child: KeyedSubtree(
+        key: ValueKey(
+          '${model.store.levelChosen}-${model.unlocked}',
+        ),
+        child: page,
+      ),
+    );
   }
 }
 
@@ -60,26 +76,58 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
+  static const _pages = [
+    TodayPage(),
+    WordsPage(),
+    RecordsPage(),
+    SettingsPage(),
+  ];
+
   @override
   Widget build(BuildContext context) {
-    const pages = [TodayPage(), WordsPage(), RecordsPage(), SettingsPage()];
     return Scaffold(
-      body: pages[_index],
+      backgroundColor: paper,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 260),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeInCubic,
+        transitionBuilder: (child, animation) {
+          final offset = Tween<Offset>(
+            begin: const Offset(0.04, 0),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: offset, child: child),
+          );
+        },
+        child: KeyedSubtree(
+          key: ValueKey(_index),
+          child: _pages[_index],
+        ),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.circle_outlined),
+            icon: Icon(Icons.wb_sunny_outlined),
+            selectedIcon: Icon(Icons.wb_sunny_rounded),
             label: '今天',
           ),
-          NavigationDestination(icon: Icon(Icons.list_alt), label: '词'),
           NavigationDestination(
-            icon: Icon(Icons.menu_book_outlined),
+            icon: Icon(Icons.auto_stories_outlined),
+            selectedIcon: Icon(Icons.auto_stories_rounded),
+            label: '词',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month_rounded),
             label: '记录',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline),
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
             label: '我的',
           ),
         ],

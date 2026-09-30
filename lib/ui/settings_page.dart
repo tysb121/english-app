@@ -60,8 +60,8 @@ class _SettingsPageState extends State<SettingsPage> {
     final store = model.store;
     final showStart = widget.gate && model.connectionOk && model.hasDeepSeekKey;
     final level = normalizeLevel(store.level);
-    return Scaffold(
-      appBar: AppBar(title: const Text('今日英语')),
+    return SoftScaffold(
+      title: widget.gate ? '连接密钥' : '我的',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
@@ -72,8 +72,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
             const SizedBox(height: 12),
           ],
-          const Text('DeepSeek 密钥', style: TextStyle(color: ink)),
-          const SizedBox(height: 8),
+          const SectionTitle('DeepSeek 密钥', icon: Icons.key_rounded),
           TextField(
             controller: _key,
             obscureText: true,
@@ -172,8 +171,7 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           if (!widget.gate) ...[
             const SizedBox(height: 16),
-            const Text('每天新词'),
-            const SizedBox(height: 8),
+            const SectionTitle('每天新词', icon: Icons.numbers_rounded),
             _choices<int>(
               values: const [5, 10, 15, 20],
               label: (value) => '$value',
@@ -184,8 +182,7 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 16),
-            const Text('水平'),
-            const SizedBox(height: 8),
+            const SectionTitle('水平', icon: Icons.stairs_outlined),
             _choices<String>(
               values: _levels,
               label: (value) => value,
@@ -201,11 +198,10 @@ class _SettingsPageState extends State<SettingsPage> {
               store.hasFrozenTodayPlan
                   ? '今天的计划已定，改水平与词数从明天生效。'
                   : '已经开始的今天不变，这些改动从明天生效。',
-              style: const TextStyle(color: ink, fontSize: 13),
+              style: const TextStyle(color: muted, fontSize: 13),
             ),
             const SizedBox(height: 16),
-            const Text('目标'),
-            const SizedBox(height: 8),
+            const SectionTitle('目标', icon: Icons.flag_outlined),
             _choices<String>(
               values: const ['职场', '日常', '考试', '都要'],
               label: (value) => value,
@@ -216,8 +212,7 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 16),
-            const Text('语气'),
-            const SizedBox(height: 8),
+            const SectionTitle('语气', icon: Icons.chat_outlined),
             _choices<String>(
               values: const ['简洁', '朋友', '老师'],
               label: (value) => value,
@@ -228,8 +223,7 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
             const SizedBox(height: 16),
-            const Text('思考强度'),
-            const SizedBox(height: 8),
+            const SectionTitle('思考强度', icon: Icons.psychology_outlined),
             _choices<String>(
               values: reasoningEfforts,
               label: reasoningEffortLabel,

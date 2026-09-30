@@ -26,13 +26,18 @@ class ThinkingPanel extends StatelessWidget {
       child: ExpansionTile(
         initiallyExpanded: initiallyExpanded ?? streaming,
         tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: 8),
+        childrenPadding: const EdgeInsets.only(bottom: 10),
+        leading: Icon(
+          streaming ? Icons.auto_awesome : Icons.psychology_alt_outlined,
+          size: 18,
+          color: indigo.withValues(alpha: 0.85),
+        ),
         title: Text(
           title,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF4E4A43),
+            fontWeight: FontWeight.w700,
+            color: muted,
           ),
         ),
         children: [
@@ -40,17 +45,23 @@ class ThinkingPanel extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFFF0EEE8),
-                borderRadius: BorderRadius.circular(10),
+                gradient: LinearGradient(
+                  colors: [
+                    indigo.withValues(alpha: 0.06),
+                    pine.withValues(alpha: 0.05),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: softBorder),
               ),
               child: Text(
                 text.isEmpty ? '…' : text,
                 style: const TextStyle(
                   fontSize: 13,
-                  color: Color(0xFF4E4A43),
-                  height: 1.35,
+                  color: muted,
+                  height: 1.4,
                 ),
               ),
             ),
@@ -86,25 +97,45 @@ class CoachAnswerBubble extends StatelessWidget {
     final pass = content.startsWith('✓');
     final fail = content.startsWith('✗');
     final Color border;
-    if (pass) {
-      border = pine;
+    final Color fill;
+    if (mine) {
+      border = pine.withValues(alpha: 0.28);
+      fill = pine.withValues(alpha: 0.12);
+    } else if (pass) {
+      border = pine.withValues(alpha: 0.45);
+      fill = pine.withValues(alpha: 0.06);
     } else if (fail) {
-      border = wrongRed;
+      border = wrongRed.withValues(alpha: 0.4);
+      fill = wrongRed.withValues(alpha: 0.05);
     } else {
-      border = const Color(0xFFE3DDD2);
+      border = softBorder;
+      fill = mist;
     }
-    return Align(
+
+    final bubble = Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.sizeOf(context).width * 0.88,
         ),
         decoration: BoxDecoration(
-          color: mine ? pine.withValues(alpha: 0.12) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: border, width: pass || fail ? 1.4 : 1),
+          color: fill,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(18),
+            topRight: const Radius.circular(18),
+            bottomLeft: Radius.circular(mine ? 18 : 6),
+            bottomRight: Radius.circular(mine ? 6 : 18),
+          ),
+          border: Border.all(color: border, width: pass || fail ? 1.3 : 1),
+          boxShadow: [
+            BoxShadow(
+              color: indigo.withValues(alpha: 0.05),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -117,12 +148,12 @@ class CoachAnswerBubble extends StatelessWidget {
             if (content.trim().isNotEmpty || !streaming)
               Text(
                 content.trim().isEmpty && streaming ? '…' : content,
-                style: const TextStyle(color: ink),
+                style: const TextStyle(color: ink, height: 1.4),
               )
             else if (streaming && reasoning.trim().isNotEmpty)
               const Text(
                 '回答生成中…',
-                style: TextStyle(fontSize: 13, color: Color(0xFF4E4A43)),
+                style: TextStyle(fontSize: 13, color: muted),
               ),
             if (!mine && !streaming && content.trim().isNotEmpty)
               _ReplyFooter(
@@ -134,6 +165,22 @@ class CoachAnswerBubble extends StatelessWidget {
           ],
         ),
       ),
+    );
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 8),
+            child: child,
+          ),
+        );
+      },
+      child: bubble,
     );
   }
 }
@@ -166,14 +213,17 @@ class _ReplyFooter extends StatelessWidget {
       parts.add('$hh:$mm');
     }
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.only(top: 10),
       child: Row(
         children: [
-          IconButton(
-            tooltip: '复制',
-            visualDensity: VisualDensity.compact,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          TextButton.icon(
+            style: TextButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              foregroundColor: muted,
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: content));
               if (context.mounted) {
@@ -185,16 +235,20 @@ class _ReplyFooter extends StatelessWidget {
                 );
               }
             },
-            icon: const Icon(Icons.copy_outlined, size: 18, color: Color(0xFF4E4A43)),
+            icon: const Icon(Icons.copy_outlined, size: 15),
+            label: const Text('复制', style: TextStyle(fontSize: 12)),
           ),
-          if (parts.isNotEmpty)
+          if (parts.isNotEmpty) ...[
+            const SizedBox(width: 4),
             Expanded(
               child: Text(
                 parts.join(' · '),
-                style: const TextStyle(fontSize: 12, color: Color(0xFF4E4A43)),
+                style: const TextStyle(fontSize: 11, color: muted),
                 overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
               ),
             ),
+          ],
         ],
       ),
     );

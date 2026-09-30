@@ -41,13 +41,11 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
     store.ensureTodayPlan();
     final stage = _stage(store);
     final sceneLoading = (_busy && stage == _Stage.scene) || store.sceneInFlight;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('今日英语'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+    return SoftScaffold(
+      title: widget.readOnly ? '回看今天' : '今日教练',
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () => Navigator.of(context).pop(),
       ),
       body: Column(
         children: [
@@ -57,11 +55,22 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
               children: [
                 if (model.chat?.contextSummary != null &&
                     !model.chat!.contextSummary!.isEmptyText)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      '更早的对话已收成检查点',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF4E4A43)),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: AppCard(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          Icon(Icons.bookmark_outline_rounded, size: 16, color: pine),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Text(
+                              '更早的对话已收成检查点',
+                              style: TextStyle(fontSize: 12, color: muted),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 for (final bubble in _local) _bubble(bubble),
@@ -110,21 +119,48 @@ class _CoachThreadPageState extends State<CoachThreadPage> {
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        enabled: !_busy,
-                        decoration: const InputDecoration(hintText: '输入英文或中文'),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: mist.withValues(alpha: 0.96),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: softBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: indigo.withValues(alpha: 0.06),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
                       ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _controller,
+                            enabled: !_busy,
+                            decoration: const InputDecoration(
+                              hintText: '输入英文或中文',
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              filled: false,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        FilledButton.icon(
+                          onPressed: _busy ? null : () => _onSend(model, stage),
+                          icon: Icon(
+                            _busy ? Icons.hourglass_top_rounded : Icons.send_rounded,
+                            size: 18,
+                          ),
+                          label: Text(_busy ? '批改中' : '发送'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: _busy ? null : () => _onSend(model, stage),
-                      child: Text(_busy ? '批改中' : '发送'),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

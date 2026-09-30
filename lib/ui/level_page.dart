@@ -7,62 +7,88 @@ class LevelPage extends StatelessWidget {
   const LevelPage({super.key});
 
   static const _options = [
-    ('新手', "I'm running late. 要迟到了"),
-    ('简单工作对话', "Let's start the standup. 我们开始站会。"),
-    ('更长的表达', "Let's take this offline. 会下再说。"),
+    (
+      '新手',
+      "I'm running late. 要迟到了",
+      Icons.emoji_emotions_outlined,
+    ),
+    (
+      '简单工作对话',
+      "Let's start the standup. 我们开始站会。",
+      Icons.work_outline_rounded,
+    ),
+    (
+      '更长的表达',
+      "Let's take this offline. 会下再说。",
+      Icons.record_voice_over_outlined,
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
-    return Scaffold(
-      appBar: AppBar(title: const Text('今日英语')),
+    return SoftScaffold(
+      title: '选择程度',
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
-          const Text(
+          Text(
             '先选一个水平',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           const Text(
             '决定从哪一档说法开始。今天的计划冻住后，改水平从明天生效。',
-            style: TextStyle(color: Color(0xFF4E4A43)),
+            style: TextStyle(color: muted, height: 1.45),
           ),
-          const SizedBox(height: 20),
-          for (final option in _options) ...[
-            OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.all(16),
-                backgroundColor: Colors.white,
-              ),
-              onPressed: () {
+          const SizedBox(height: 16),
+          for (final option in _options)
+            AppCard(
+              onTap: () {
                 model.store.level = option.$1;
                 model.store.levelChosen = true;
                 model.commit();
               },
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(
-                    option.$1,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: ink,
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          pine.withValues(alpha: 0.18),
+                          indigo.withValues(alpha: 0.14),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(option.$3, color: pine),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          option.$1,
+                          style: const TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          option.$2,
+                          style: const TextStyle(color: muted, fontSize: 13),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    option.$2,
-                    style: const TextStyle(color: Color(0xFF4E4A43)),
-                  ),
+                  const Icon(Icons.chevron_right_rounded, color: muted),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-          ],
         ],
       ),
     );

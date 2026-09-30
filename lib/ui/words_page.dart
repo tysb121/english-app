@@ -19,30 +19,33 @@ class WordsPage extends StatelessWidget {
     ];
     final today = [for (final id in todayIds) store.word(id)].whereType<Lexeme>();
     final later = store.catalog.where((word) => !todayIds.contains(word.id));
-    return Scaffold(
-      appBar: AppBar(title: const Text('今日英语')),
+    return SoftScaffold(
+      title: '词本',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
         children: [
-          FilledButton(
-            onPressed: () => _add(context),
-            child: const Text('添加'),
-          ),
-          const SizedBox(height: 16),
-          const Text('今天的词'),
-          for (final word in today) _row(context, word),
-          const SizedBox(height: 16),
-          const Text('以后会学的词'),
+          PrimaryCta(label: '添加生词', onPressed: () => _add(context)),
+          const SizedBox(height: 8),
+          const SectionTitle('今天的词', icon: Icons.wb_sunny_outlined),
+          if (today.isEmpty)
+            const EmptyHint(
+              icon: Icons.auto_stories_outlined,
+              title: '今天还没有词',
+              subtitle: '完成计划或添加生词后会出现在这里。',
+            )
+          else
+            for (final word in today) _row(context, word, highlight: true),
+          const SizedBox(height: 8),
+          const SectionTitle('以后会学的词', icon: Icons.schedule_outlined),
           for (final word in later) _row(context, word),
         ],
       ),
     );
   }
 
-  Widget _row(BuildContext context, Lexeme word) {
-    return ListTile(
-      title: Text(word.en),
-      subtitle: Text(word.cn),
+  Widget _row(BuildContext context, Lexeme word, {bool highlight = false}) {
+    return AppCard(
+      accent: highlight,
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -50,6 +53,50 @@ class WordsPage extends StatelessWidget {
           ),
         );
       },
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  pine.withValues(alpha: 0.18),
+                  indigo.withValues(alpha: 0.12),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Text(
+              word.en.isNotEmpty ? word.en[0].toUpperCase() : '?',
+              style: const TextStyle(
+                color: pine,
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  word.en,
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${word.cn} · ${word.pos}',
+                  style: const TextStyle(color: muted, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: muted),
+        ],
+      ),
     );
   }
 
@@ -132,37 +179,44 @@ class WordCardPage extends StatelessWidget {
     final next = word == null
         ? null
         : store.nextErrorReview(id) ?? store.successReviewOn(id);
-    return Scaffold(
-      appBar: AppBar(
-        leading: TextButton(
-          onPressed: () => Navigator.maybePop(context),
-          child: const Text('关闭'),
-        ),
-        leadingWidth: 72,
-        title: const Text('今日英语'),
+    return SoftScaffold(
+      title: '词卡',
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () => Navigator.maybePop(context),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: word == null
             ? const SizedBox.shrink()
-            : Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(word.en, style: const TextStyle(fontSize: 32, color: ink)),
-                  const SizedBox(height: 8),
-                  Text(word.cn, style: const TextStyle(fontSize: 20)),
-                  Text(word.pos),
-                  const SizedBox(height: 12),
-                  Text(
-                    next == null
-                        ? '还没排进某一天'
-                        : '下一次 ${store.formatDay(next)}',
-                  ),
-                  if (fresh) ...[
+            : AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      word.en,
+                      style: const TextStyle(
+                        fontSize: 32,
+                        fontWeight: FontWeight.w800,
+                        color: ink,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(word.cn, style: const TextStyle(fontSize: 20)),
+                    Text(word.pos, style: const TextStyle(color: muted)),
                     const SizedBox(height: 12),
-                    const Text('从明天开始练'),
+                    Text(
+                      next == null
+                          ? '还没排进某一天'
+                          : '下一次 ${store.formatDay(next)}',
+                      style: const TextStyle(color: muted),
+                    ),
+                    if (fresh) ...[
+                      const SizedBox(height: 12),
+                      const Text('从明天开始练', style: TextStyle(color: pine)),
+                    ],
                   ],
-                ],
+                ),
               ),
       ),
     );

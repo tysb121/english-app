@@ -12,25 +12,81 @@ class RecordsPage extends StatelessWidget {
     final store = AppScope.of(context).store;
     store.ensureTodayPlan();
     final days = store.history;
-    return Scaffold(
-      appBar: AppBar(title: const Text('今日英语')),
-      body: ListView(
-        children: [
-          for (final plan in days)
-            ListTile(
-              title: Text(store.formatDay(plan.date)),
-              subtitle: Text(plan.scene?.scenarioCn ?? '还没有场景'),
-              trailing: Text(store.planComplete(plan) ? '完成' : '未完成'),
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => RecordDetailPage(day: plan.date),
+    return SoftScaffold(
+      title: '记录',
+      body: days.isEmpty
+          ? const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: EmptyHint(
+                  icon: Icons.calendar_month_outlined,
+                  title: '还没有打卡记录',
+                  subtitle: '完成今天的对话或考核后，会显示在这里。',
+                ),
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+              children: [
+                for (final plan in days)
+                  AppCard(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => RecordDetailPage(day: plan.date),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: (store.planComplete(plan) ? pine : muted)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Icon(
+                            store.planComplete(plan)
+                                ? Icons.check_circle_rounded
+                                : Icons.radio_button_unchecked,
+                            color: store.planComplete(plan) ? pine : muted,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                store.formatDay(plan.date),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                plan.scene?.scenarioCn ?? '还没有场景',
+                                style: const TextStyle(color: muted, fontSize: 13),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          store.planComplete(plan) ? '完成' : '未完成',
+                          style: TextStyle(
+                            color: store.planComplete(plan) ? pine : muted,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                );
-              },
+              ],
             ),
-        ],
-      ),
     );
   }
 }
@@ -47,37 +103,62 @@ class RecordDetailPage extends StatelessWidget {
     for (final item in store.history) {
       if (item.date == day) plan = item;
     }
-    return Scaffold(
-      appBar: AppBar(
-        leading: TextButton(
-          onPressed: () => Navigator.maybePop(context),
-          child: const Text('关闭'),
-        ),
-        leadingWidth: 72,
-        title: const Text('今日英语'),
+    return SoftScaffold(
+      title: '当天详情',
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () => Navigator.maybePop(context),
       ),
       body: plan == null
           ? const SizedBox.shrink()
           : ListView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
-                Text(store.formatDay(plan.date)),
-                const SizedBox(height: 8),
-                Text(plan.scene?.scenarioCn ?? '还没有场景'),
-                if (plan.scene != null)
-                  Text(
-                    plan.scene!.scenarioEn,
-                    style: const TextStyle(color: ink),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        store.formatDay(plan.date),
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(plan.scene?.scenarioCn ?? '还没有场景'),
+                      if (plan.scene != null)
+                        Text(
+                          plan.scene!.scenarioEn,
+                          style: const TextStyle(color: muted),
+                        ),
+                    ],
                   ),
-                const SizedBox(height: 16),
-                const Text('新词'),
-                for (final id in plan.newWordIds)
-                  Text(store.word(id)?.en ?? id),
-                const SizedBox(height: 16),
-                const Text('笔记'),
-                if (plan.notes.isEmpty) const Text('没有保存的笔记'),
-                for (final note in plan.notes)
-                  Text('${note.wrong} → ${note.corrected} → ${note.whyCn}'),
+                ),
+                const SectionTitle('新词', icon: Icons.auto_stories_outlined),
+                AppCard(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final id in plan.newWordIds)
+                        Text(store.word(id)?.en ?? id),
+                    ],
+                  ),
+                ),
+                const SectionTitle('笔记', icon: Icons.edit_note_rounded),
+                AppCard(
+                  child: plan.notes.isEmpty
+                      ? const Text('没有保存的笔记', style: TextStyle(color: muted))
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            for (final note in plan.notes)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  '${note.wrong} → ${note.corrected} → ${note.whyCn}',
+                                ),
+                              ),
+                          ],
+                        ),
+                ),
               ],
             ),
     );
