@@ -1,6 +1,6 @@
-# 本地存储方案：SQLite（待实现）
+# 本地存储方案：SQLite
 
-日期：2026-09-30。产品已定：**业务数据用 SQLite；密钥仍走系统安全存储**。本文只定方案，**本轮不改代码**。当前仍为 `english_progress.json` + `flutter_secure_storage`。
+日期：2026-09-30。产品已定：**业务数据用 SQLite；密钥仍走系统安全存储**。当前仍为 `english_progress.json` + `flutter_secure_storage`；按下方顺序迁移。
 
 与 [产品方向-2026-09-30.md](产品方向-2026-09-30.md) 一致：无后端、无账号云同步；词书与进度都在本机。
 
@@ -46,7 +46,7 @@
 - 把 API Key 写入 SQLite
 - 为「省内存」再拆远程词库（本机 1MB 级足够）
 
-## 实现顺序（以后改代码时）
+## 实现顺序
 
 1. 加依赖与空库 / schema 版本
 2. 灌入 `cefr_core`，用 SQL 按 level 抽未教词，替换 LessonStore 选词数据源
