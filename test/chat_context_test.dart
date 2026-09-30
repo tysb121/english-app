@@ -3,9 +3,10 @@ import 'package:english_app/engine/api_requests.dart';
 import 'package:english_app/engine/chat_context.dart';
 import 'package:english_app/engine/chat_message.dart';
 import 'package:english_app/engine/chat_thread.dart';
-import 'package:english_app/engine/lesson_store.dart';
 import 'package:english_app/net/poster.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/cefr_fixture.dart';
 
 ChatMessage u(String id, String text) =>
     ChatMessage(id: id, role: ChatRole.user, content: text);
@@ -149,7 +150,7 @@ void main() {
   });
 
   test('successful reply does not change lesson dates', () async {
-    final store = LessonStore(clock: () => DateTime(2026, 6, 1));
+    final store = fixtureStore(clock: () => DateTime(2026, 6, 1));
     store.ensureTodayPlan();
     final before = store.reviewSnapshot();
     final checked = store.checkedIn;
@@ -176,7 +177,7 @@ void main() {
   });
 
   test('progress shell restores legacy lesson json and keeps chat', () {
-    final store = LessonStore(clock: () => DateTime(2026, 7, 1));
+    final store = fixtureStore(clock: () => DateTime(2026, 7, 1));
     final shell = ProgressShell(store: store);
     final legacy = store.progressJson();
     shell.restore(legacy);
@@ -189,7 +190,7 @@ void main() {
     expect(encoded.contains('"kind":"english-app"'), isTrue);
     expect(encoded.contains('"lesson"'), isTrue);
 
-    final store2 = LessonStore(clock: () => DateTime(2026, 7, 1));
+    final store2 = fixtureStore(clock: () => DateTime(2026, 7, 1));
     final shell2 = ProgressShell(store: store2);
     shell2.restore(encoded);
     expect(shell2.chat.messages.single.content, 'hi');

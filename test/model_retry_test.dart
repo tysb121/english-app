@@ -2,13 +2,14 @@ import 'dart:convert';
 
 import 'package:english_app/app/app_model.dart';
 import 'package:english_app/engine/api_requests.dart';
-import 'package:english_app/engine/lesson_store.dart';
 import 'package:english_app/net/poster.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/cefr_fixture.dart';
+
 void main() {
   test('an invalid scene is retried once and then kept', () async {
-    final store = LessonStore(clock: () => DateTime(2026, 5, 2));
+    final store = fixtureStore(clock: () => DateTime(2026, 5, 2));
     store.ensureTodayPlan();
     final before = store.reviewSnapshot();
     final poster = ScriptPoster([
@@ -44,7 +45,7 @@ void main() {
   });
 
   test('two rejected grades do not move dates or check-in', () async {
-    final store = LessonStore(clock: () => DateTime(2026, 5, 3));
+    final store = fixtureStore(clock: () => DateTime(2026, 5, 3));
     store.ensureTodayPlan();
     final before = store.reviewSnapshot();
     final poster = ScriptPoster([
@@ -65,7 +66,7 @@ void main() {
   });
 
   test('probe and translation do not grade the quiz', () async {
-    final store = LessonStore(clock: () => DateTime(2026, 5, 4));
+    final store = fixtureStore(clock: () => DateTime(2026, 5, 4));
     store.ensureTodayPlan();
     store.applyModelResponse(
       task: 'grade_open',

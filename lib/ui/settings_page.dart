@@ -27,7 +27,7 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _busy = false;
   bool _filled = false;
 
-  static const _levels = ['新手', '简单工作对话', '更长的表达'];
+  static const _levels = productLevels;
 
   @override
   void didChangeDependencies() {

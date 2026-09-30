@@ -4,6 +4,7 @@ import 'app/app_model.dart';
 import 'app/local_progress.dart';
 import 'app/progress_shell.dart';
 import 'app/secrets.dart';
+import 'data/cefr_core.dart';
 import 'engine/lesson_store.dart';
 import 'engine/chat_thread.dart';
 import 'net/io_poster.dart';
@@ -13,7 +14,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final secrets = await SecureSecrets().load();
   final progress = await LocalProgress.open();
-  final store = LessonStore();
+  final book = await loadCefrCore();
+  final store = LessonStore(book: book.entries);
   final shell = ProgressShell(store: store, chat: ChatThread());
   final saved = await progress.read();
   if (saved != null && saved.trim().isNotEmpty) {

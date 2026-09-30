@@ -10,7 +10,7 @@
 | 基础 | A2 | `cefr_core` |
 | 进阶 | B1 | `cefr_core` |
 
-职场约 70 条种子（`lib/data/seed_words.dart`）仍保留，后续作加餐词书，**不是**本文件默认主词书。
+职场约 70 条种子已删除；本仓库默认与唯一主词书为 `cefr_core`（不做职场加餐）。
 
 ## 源与许可
 
@@ -66,6 +66,7 @@
 
 ## 代码现状
 
-- `lib/data/cefr_core.dart`：轻量数据类 + `rootBundle` 加载器，**尚未**接到 `LessonStore` / UI（避免本轮大改选词与打卡）。
-- 现有职场种子与测试路径不变。
-- 后续：`LessonStore` 默认目录切到 `cefr_core`，职场种子改为 add-on `book_id`。
+- `lib/data/cefr_core.dart`：数据类 + `rootBundle` 加载器。
+- `main.dart` 启动时 `loadCefrCore()`，注入 `LessonStore(book: entries)`。
+- 水平：入门=A1 / 基础=A2 / 进阶=B1；当天未教词中随机，计划冻住后改水平明天生效。
+- `lib/data/seed_words.dart` 已删除。

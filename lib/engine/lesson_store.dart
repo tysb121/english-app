@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 
-import '../data/seed_words.dart';
+import '../data/cefr_core.dart';
 import 'reasoning_effort.dart';
 
 DateTime dateOnly(DateTime value) =>
@@ -16,29 +16,37 @@ int vocabPassThreshold(int newWordCount) => (newWordCount * 8 + 9) ~/ 10;
 
 String normalizeAnswer(String value) => value.trim().toLowerCase();
 
-SeedBand bandForLevel(String level) {
-  switch (level) {
-    case '新手':
-    case '日常交流': // legacy label reads as beginner
-      return SeedBand.beginner;
-    case '更长的表达':
-      return SeedBand.longer;
-    case '简单工作对话':
+const productLevels = ['入门', '基础', '进阶'];
+
+/// Maps product labels (and legacy workplace labels) to CEFR-J codes.
+String cefrCodeForLevel(String level) {
+  switch (normalizeLevel(level)) {
+    case '基础':
+      return 'a2';
+    case '进阶':
+      return 'b1';
+    case '入门':
     default:
-      return SeedBand.workplace;
+      return 'a1';
   }
 }
 
 String normalizeLevel(String level) {
-  if (level == '日常交流') return '新手';
-  return level;
-}
-
-List<SeedBand> bandsFrom(SeedBand start) {
-  const order = [SeedBand.beginner, SeedBand.workplace, SeedBand.longer];
-  final index = order.indexOf(start);
-  if (index < 0) return order;
-  return order.sublist(index);
+  switch (level) {
+    case '新手':
+    case '日常交流':
+      return '入门';
+    case '简单工作对话':
+      return '基础';
+    case '更长的表达':
+      return '进阶';
+    case '入门':
+    case '基础':
+    case '进阶':
+      return level;
+    default:
+      return '入门';
+  }
 }
 
 String createInstallId() {
@@ -51,7 +59,7 @@ String createInstallId() {
   ).join();
 }
 
-enum WordSource { seed, user }
+enum WordSource { book, user }
 
 class Lexeme {
   final String id;
@@ -59,6 +67,8 @@ class Lexeme {
   final String cn;
   final String pos;
   final WordSource source;
+  /// CEFR code a1|a2|b1 for book words; empty for user words.
+  final String level;
 
   const Lexeme({
     required this.id,
@@ -66,6 +76,7 @@ class Lexeme {
     required this.cn,
     required this.pos,
     required this.source,
+    this.level = '',
   });
 }
 
@@ -215,24 +226,26 @@ class DayPlan {
 class LessonStore {
   LessonStore({
     DateTime Function()? clock,
-    List<SeedWord>? seeds,
+    List<CefrWord>? book,
+    Random? random,
     String? installId,
   }) : _clock = clock ?? DateTime.now,
-       _seeds = seeds ?? seedWords,
+       _random = random ?? Random(),
        installId = installId ?? createInstallId() {
-    for (final seed in _seeds) {
-      _words[seed.id] = Lexeme(
-        id: seed.id,
-        en: seed.en,
-        cn: seed.cn,
-        pos: seed.pos,
-        source: WordSource.seed,
+    for (final entry in book ?? const <CefrWord>[]) {
+      _words[entry.id] = Lexeme(
+        id: entry.id,
+        en: entry.en,
+        cn: entry.cn,
+        pos: entry.pos,
+        source: WordSource.book,
+        level: entry.level,
       );
     }
   }
 
   final DateTime Function() _clock;
-  final List<SeedWord> _seeds;
+  final Random _random;
   final Map<String, Lexeme> _words = {};
   final Map<String, DayPlan> _plans = {};
   final Map<String, List<_Attempt>> _attempts = {};
@@ -240,7 +253,7 @@ class LessonStore {
   final Map<String, _Review> _reviews = {};
 
   int dailyWords = 5;
-  String level = '简单工作对话';
+  String level = '入门';
   bool levelChosen = false;
   String reasoningEffort = 'off';
   String goal = '职场';
@@ -262,27 +275,29 @@ class LessonStore {
       for (final plan in _plans.values) ...plan.newWordIds,
     };
     final picked = <String>[];
-    void takeFrom(bool userOnly) {
-      for (final word in _words.values) {
-        if (picked.length >= dailyWords) return;
-        if (used.contains(word.id) || picked.contains(word.id)) continue;
-        final isUser = word.source == WordSource.user;
-        if (userOnly != isUser) continue;
-        if (!userOnly && word.source != WordSource.seed) continue;
-        picked.add(word.id);
-      }
+
+    // User-added words fill new slots first (still in insertion order).
+    for (final word in _words.values) {
+      if (picked.length >= dailyWords) break;
+      if (word.source != WordSource.user) continue;
+      if (used.contains(word.id) || picked.contains(word.id)) continue;
+      picked.add(word.id);
     }
 
-    takeFrom(true);
-    final bands = bandsFrom(bandForLevel(level));
-    for (final band in bands) {
-      if (picked.length >= dailyWords) break;
-      for (final seed in _seeds) {
-        if (picked.length >= dailyWords) break;
-        if (seed.band != band) continue;
-        if (used.contains(seed.id) || picked.contains(seed.id)) continue;
-        picked.add(seed.id);
-      }
+    // Remaining slots: random among untaught book words in the current CEFR level.
+    if (picked.length < dailyWords) {
+      final code = cefrCodeForLevel(level);
+      final pool = [
+        for (final word in _words.values)
+          if (word.source == WordSource.book &&
+              word.level == code &&
+              !used.contains(word.id) &&
+              !picked.contains(word.id))
+            word.id,
+      ];
+      pool.shuffle(_random);
+      final need = dailyWords - picked.length;
+      picked.addAll(pool.take(need));
     }
     final reviews = <String>[];
     for (final entry in _reviews.entries) {
@@ -327,6 +342,29 @@ class LessonStore {
   Lexeme? word(String id) => _words[id];
 
   List<Lexeme> get catalog => _words.values.toList();
+
+  /// User words plus already-introduced book words (keeps 词本 UI off the full 5k list).
+  List<Lexeme> get browsableWords => [
+        for (final word in _words.values)
+          if (word.source == WordSource.user ||
+              (_reviews[word.id]?.introducedOn != null))
+            word,
+      ];
+
+  int untaughtInLevelCount() {
+    final code = cefrCodeForLevel(level);
+    final used = <String>{
+      for (final plan in _plans.values) ...plan.newWordIds,
+    };
+    var count = 0;
+    for (final word in _words.values) {
+      if (word.source != WordSource.book) continue;
+      if (word.level != code) continue;
+      if (used.contains(word.id)) continue;
+      count += 1;
+    }
+    return count;
+  }
 
   List<String> vocabQueue(DayPlan plan) => [
     ...plan.newWordIds,
@@ -979,15 +1017,16 @@ class LessonStore {
     if (wordCounts.contains(json['dailyWords'])) {
       dailyWords = json['dailyWords'] as int;
     }
-    const levels = {'新手', '简单工作对话', '日常交流', '更长的表达'};
+    const legacyLevels = {'新手', '简单工作对话', '日常交流', '更长的表达'};
+    const levels = {'入门', '基础', '进阶', ...legacyLevels};
     const goals = {'职场', '日常', '考试', '都要'};
     const tones = {'简洁', '朋友', '老师'};
-    if (levels.contains(json['level'])) {
+    if (json['level'] is String && levels.contains(json['level'])) {
       level = normalizeLevel(json['level'] as String);
     }
     if (json['levelChosen'] == true) {
       levelChosen = true;
-    } else if (levels.contains(json['level'])) {
+    } else if (json['level'] is String && levels.contains(json['level'])) {
       // Returning users who already had a level saved are treated as chosen.
       levelChosen = true;
     }

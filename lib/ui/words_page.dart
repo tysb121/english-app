@@ -18,7 +18,9 @@ class WordsPage extends StatelessWidget {
       ...plan.errorWordIds,
     ];
     final today = [for (final id in todayIds) store.word(id)].whereType<Lexeme>();
-    final later = store.catalog.where((word) => !todayIds.contains(word.id));
+    final later = store.browsableWords.where((word) => !todayIds.contains(word.id));
+    final remaining = store.untaughtInLevelCount();
+    final levelLabel = normalizeLevel(store.level);
     return SoftScaffold(
       title: '词本',
       body: ListView(
@@ -36,8 +38,25 @@ class WordsPage extends StatelessWidget {
           else
             for (final word in today) _row(context, word, highlight: true),
           const SizedBox(height: 8),
+          SectionTitle('当前水平 · $levelLabel', icon: Icons.stairs_outlined),
+          AppCard(
+            child: Text(
+              remaining > 0
+                  ? '还有 $remaining 个未教词，每天从中随机抽。'
+                  : '这一档的新词已经抽完了，可以在「我的」里改水平（明天生效）。',
+              style: const TextStyle(color: muted, height: 1.4),
+            ),
+          ),
+          const SizedBox(height: 8),
           const SectionTitle('以后会学的词', icon: Icons.schedule_outlined),
-          for (final word in later) _row(context, word),
+          if (later.isEmpty)
+            const EmptyHint(
+              icon: Icons.schedule_outlined,
+              title: '还没有排进以后的词',
+              subtitle: '自己加的生词会优先出现在这里。',
+            )
+          else
+            for (final word in later) _row(context, word),
         ],
       ),
     );

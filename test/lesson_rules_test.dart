@@ -1,48 +1,72 @@
-import 'package:english_app/data/seed_words.dart';
 import 'package:english_app/engine/api_requests.dart';
 import 'package:english_app/engine/lesson_store.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/cefr_fixture.dart';
+
 void main() {
-  test('seed list is the project word list', () {
-    expect(seedWords.length, 70);
-    expect(seedWords.map((word) => word.id).toSet().length, 70);
-    expect(seedWords.first.en, 'standup');
+  test('CEFR fixture covers A1/A2/B1 for product levels', () {
+    expect(cefrFixture.where((w) => w.level == 'a1').length, greaterThanOrEqualTo(10));
+    expect(cefrFixture.where((w) => w.level == 'a2'), isNotEmpty);
+    expect(cefrFixture.where((w) => w.level == 'b1'), isNotEmpty);
+    expect(normalizeLevel('新手'), '入门');
+    expect(normalizeLevel('简单工作对话'), '基础');
+    expect(normalizeLevel('更长的表达'), '进阶');
+    expect(cefrCodeForLevel('入门'), 'a1');
+    expect(cefrCodeForLevel('基础'), 'a2');
+    expect(cefrCodeForLevel('进阶'), 'b1');
   });
 
-
-  test('beginner level picks short phrases, not standup first', () {
-    final store = LessonStore(
+  test('入门 picks only A1; level change freezes today', () {
+    final store = fixtureStore(
       clock: () => DateTime(2026, 2, 1),
-    )..level = '新手';
+      level: '入门',
+    );
     final plan = store.ensureTodayPlan();
-    expect(plan.newWordIds, ['s24', 's25', 's44', 's45', 's46']);
-    expect(plan.newWordIds.contains('s01'), isFalse);
+    expect(plan.newWordIds, [
+      'cc_a1_hello_noun_ce4a5e',
+      'cc_a1_good_adjectiv_2bed5e',
+      'cc_a1_time_noun_53674f',
+      'cc_a1_day_noun_7f65b3',
+      'cc_a1_work_noun_bf4aae',
+    ]);
+    for (final id in plan.newWordIds) {
+      expect(store.word(id)!.level, 'a1');
+    }
 
-    store.level = '更长的表达';
-    // frozen today
+    store.level = '进阶';
     expect(store.ensureTodayPlan().newWordIds, plan.newWordIds);
 
     final day2 = DateTime(2026, 2, 2);
-    final store2 = LessonStore(clock: () => day2)..level = '更长的表达';
-    // fresh store day 2 with longer level starts at longer band
-    final longer = store2.ensureTodayPlan();
-    expect(longer.newWordIds.first, 's12');
+    final store2 = fixtureStore(clock: () => day2, level: '进阶');
+    final advanced = store2.ensureTodayPlan();
+    expect(advanced.newWordIds.first, 'cc_b1_abandon_verb_bb6626');
+    for (final id in advanced.newWordIds) {
+      expect(store2.word(id)!.level, 'b1');
+    }
   });
 
-  test('legacy 日常交流 level restores as 新手', () {
-    final store = LessonStore(clock: () => DateTime(2026, 3, 1));
-    store.restore('{"level":"日常交流","dailyWords":5,"plans":[],"userWords":[],"attempts":{},"errors":{},"reviews":{}}');
-    expect(store.level, '新手');
-    expect(store.ensureTodayPlan().newWordIds.first, 's24');
+  test('legacy 日常交流 level restores as 入门', () {
+    final store = fixtureStore(clock: () => DateTime(2026, 3, 1));
+    store.restore(
+      '{"level":"日常交流","dailyWords":5,"plans":[],"userWords":[],"attempts":{},"errors":{},"reviews":{}}',
+    );
+    expect(store.level, '入门');
+    expect(store.ensureTodayPlan().newWordIds.first, 'cc_a1_hello_noun_ce4a5e');
   });
 
   test('frozen plan, vocab, reviews, errors, check-in, and notes', () {
     var day = DateTime(2026, 1, 1);
-    final store = LessonStore(clock: () => day);
+    final store = fixtureStore(clock: () => day);
 
     final first = store.ensureTodayPlan();
-    expect(first.newWordIds, ['s01', 's02', 's03', 's04', 's05']);
+    expect(first.newWordIds, [
+      'cc_a1_hello_noun_ce4a5e',
+      'cc_a1_good_adjectiv_2bed5e',
+      'cc_a1_time_noun_53674f',
+      'cc_a1_day_noun_7f65b3',
+      'cc_a1_work_noun_bf4aae',
+    ]);
     store.dailyWords = 20;
     final redraw = store.ensureTodayPlan();
     expect(redraw.newWordIds, first.newWordIds);
@@ -63,7 +87,7 @@ void main() {
     expect(store.nextErrorReview(wrongId), DateTime(2026, 1, 2));
     store.advanceVocab();
     expect(store.vocabThresholdMet, isTrue);
-    expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
+    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
 
     expect(store.checkedIn, isFalse);
     store.markDialogueDone();
@@ -87,9 +111,14 @@ void main() {
     day = DateTime(2026, 1, 2);
     final next = store.ensureTodayPlan();
     expect(next.newWordIds.first, added);
-    expect(next.newWordIds.skip(1).take(4), ['s06', 's07', 's08', 's09']);
+    expect(next.newWordIds.skip(1).take(4), [
+      'cc_a1_home_noun_b8d824',
+      'cc_a1_friend_noun_c6552e',
+      'cc_a1_water_noun_e21e30',
+      'cc_a1_book_noun_5f36f6',
+    ]);
     expect(next.errorWordIds, [wrongId]);
-    expect(store.todayContains('s01'), isFalse);
+    expect(store.todayContains('cc_a1_hello_noun_ce4a5e'), isFalse);
 
     final before = store.reviewSnapshot();
     final quizBefore = store.quizSnapshot();
@@ -118,7 +147,7 @@ void main() {
 
   test('error intervals reset and then leave the queue', () {
     var day = DateTime(2026, 2, 1);
-    final store = LessonStore(clock: () => day);
+    final store = fixtureStore(clock: () => day);
     store.ensureTodayPlan();
     final id = store.currentVocabId!;
     store.submitVocab('wrong');
@@ -151,7 +180,7 @@ void main() {
 
   test('a correct new word is due on days 2, 4, and 8', () {
     var day = DateTime(2026, 3, 1);
-    final store = LessonStore(clock: () => day);
+    final store = fixtureStore(clock: () => day);
     store.ensureTodayPlan();
     final id = store.currentVocabId!;
     _answerCurrent(store, correctly: true);
@@ -184,7 +213,7 @@ void main() {
   });
 
   test('notes confirm stores text and check-in stays', () {
-    final store = LessonStore(clock: () => DateTime(2026, 4, 1));
+    final store = fixtureStore(clock: () => DateTime(2026, 4, 1));
     _checkIn(store);
     store.confirmNotes(store.noteDrafts());
     expect(store.savedNotes, isNotEmpty);
@@ -194,19 +223,19 @@ void main() {
   });
 
   test('DeepSeek responses do not move dates unless the body is accepted', () {
-    final store = LessonStore(clock: () => DateTime(2026, 5, 1));
+    final store = fixtureStore(clock: () => DateTime(2026, 5, 1));
     store.ensureTodayPlan();
     final before = store.reviewSnapshot();
     expect(
       store.applyModelResponse(
         task: 'fill_scene',
-        content: _scene('Standup'),
+        content: _scene('Hello'),
         finishReason: 'stop',
       ),
       isTrue,
     );
-    expect(store.scene!.scenarioEn, 'Standup');
-    expect(store.scene!.scenarioCn, '早会');
+    expect(store.scene!.scenarioEn, 'Hello');
+    expect(store.scene!.scenarioCn, '打招呼');
     expect(store.shouldRequestScene, isFalse);
     expect(
       store.applyModelResponse(
@@ -216,7 +245,7 @@ void main() {
       ),
       isTrue,
     );
-    expect(store.scene!.scenarioEn, 'Standup');
+    expect(store.scene!.scenarioEn, 'Hello');
     expect(store.reviewSnapshot(), before);
 
     final quizBefore = store.quizSnapshot();
@@ -269,7 +298,7 @@ void main() {
     expect(deepSeek.body.containsKey('tools'), isFalse);
     expect(deepSeek.body['stream'], isFalse);
 
-    final store = LessonStore(clock: () => DateTime(2026, 6, 1));
+    final store = fixtureStore(clock: () => DateTime(2026, 6, 1));
     store.ensureTodayPlan();
     store.applyModelResponse(
       task: 'grade_open',
@@ -284,22 +313,22 @@ void main() {
   });
 
   test('saved progress reloads the plan and keeps keys out', () {
-    final store = LessonStore(clock: () => DateTime(2026, 8, 2));
+    final store = fixtureStore(clock: () => DateTime(2026, 8, 2));
     store.ensureTodayPlan();
     store.addUserWord(en: 'ship it', cn: '发布吧', pos: 'phrase');
     expect(
       store.applyModelResponse(
         task: 'fill_scene',
-        content: _scene('Standup'),
+        content: _scene('Hello'),
         finishReason: 'stop',
       ),
       isTrue,
     );
     store.advanceDialogue();
-    final again = LessonStore(clock: () => DateTime(2026, 8, 2));
+    final again = fixtureStore(clock: () => DateTime(2026, 8, 2));
     again.restore(store.progressJson());
     expect(again.scheduledNewWords(), store.scheduledNewWords());
-    expect(again.scene!.scenarioCn, '早会');
+    expect(again.scene!.scenarioCn, '打招呼');
     expect(again.dialogueCursor, 1);
     expect(
       again.catalog.any(
@@ -314,7 +343,7 @@ void main() {
 
   test('a second submit without advancing does not move the review date', () {
     final day = DateTime(2026, 3, 1);
-    final store = LessonStore(clock: () => day);
+    final store = fixtureStore(clock: () => day);
     store.ensureTodayPlan();
     final id = store.currentVocabId!;
     final first = store.submitVocab(store.word(id)!.en);
@@ -334,7 +363,7 @@ void main() {
     expect(store.pendingVocab?.correct, isTrue);
     expect(store.reviewSnapshot(), dates);
 
-    final reloaded = LessonStore(clock: () => day);
+    final reloaded = fixtureStore(clock: () => day);
     reloaded.restore(store.progressJson());
     expect(reloaded.pendingVocab?.wordId, id);
     expect(reloaded.pendingVocab?.correct, isTrue);
@@ -344,7 +373,7 @@ void main() {
     expect(reloaded.reviewSnapshot(), dates);
 
     var errorDay = DateTime(2026, 2, 1);
-    final errors = LessonStore(clock: () => errorDay);
+    final errors = fixtureStore(clock: () => errorDay);
     errors.ensureTodayPlan();
     final errorId = errors.currentVocabId!;
     errors.submitVocab('wrong');
@@ -365,7 +394,7 @@ void main() {
     expect(errors.pendingError?.correct, isTrue);
     expect(errors.reviewSnapshot(), errorDates);
 
-    final restoredErrors = LessonStore(clock: () => errorDay);
+    final restoredErrors = fixtureStore(clock: () => errorDay);
     restoredErrors.restore(errors.progressJson());
     expect(restoredErrors.pendingError?.correct, isTrue);
     restoredErrors.submitErrorReview(errorId, 'wrong');
@@ -414,29 +443,29 @@ void _checkIn(LessonStore store) {
 }
 
 const _passGrade =
-    '{"pass":true,"errors":[],"corrected_en":"I finished the standup."}';
+    '{"pass":true,"errors":[],"corrected_en":"I said hello."}';
 
 const _failGrade =
-    '{"pass":false,"errors":[{"excerpt":"He go","fix":"He goes","why_cn":"第三人称单数要加 s。"}],"corrected_en":"He goes to the standup."}';
+    '{"pass":false,"errors":[{"excerpt":"He go","fix":"He goes","why_cn":"第三人称单数要加 s。"}],"corrected_en":"He goes to school."}';
 
 String _scene(String name) => '''
 {
   "scenario_en": "$name",
-  "scenario_cn": "早会",
-  "phrases": [{"en": "Let's start.", "cn": "我们开始。"}],
+  "scenario_cn": "打招呼",
+  "phrases": [{"en": "Hello.", "cn": "你好。"}],
   "dialogue": [
-    {"speaker": "A", "en": "What did you finish?", "cn": "你做完了什么？"},
-    {"speaker": "B", "en": "I finished the standup.", "cn": "我开完了站会。"},
-    {"speaker": "A", "en": "Any blocker?", "cn": "有阻碍吗？"},
-    {"speaker": "B", "en": "No blocker.", "cn": "没有阻碍。"},
-    {"speaker": "A", "en": "Please follow up.", "cn": "请跟进。"},
-    {"speaker": "B", "en": "I will follow up.", "cn": "我会跟进。"}
+    {"speaker": "A", "en": "Hello!", "cn": "你好！"},
+    {"speaker": "B", "en": "Hi, good morning.", "cn": "嗨，早上好。"},
+    {"speaker": "A", "en": "How are you?", "cn": "你好吗？"},
+    {"speaker": "B", "en": "I am good.", "cn": "我很好。"},
+    {"speaker": "A", "en": "See you at school.", "cn": "学校见。"},
+    {"speaker": "B", "en": "See you.", "cn": "再见。"}
   ],
   "grammar": {
-    "title_en": "Simple past",
-    "title_cn": "一般过去时",
-    "point_cn": "说已经发生的事。",
-    "examples": ["I finished the report.", "I sent the notes."]
+    "title_en": "Greeting",
+    "title_cn": "打招呼",
+    "point_cn": "用简单的问候开场。",
+    "examples": ["Hello.", "Good morning."]
   }
 }
 ''';

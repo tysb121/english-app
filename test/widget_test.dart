@@ -3,23 +3,24 @@ import 'dart:convert';
 
 import 'package:english_app/app/app_model.dart';
 import 'package:english_app/engine/api_requests.dart';
-import 'package:english_app/engine/lesson_store.dart';
 import 'package:english_app/net/poster.dart';
 import 'package:english_app/ui/english_app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/cefr_fixture.dart';
+
 void main() {
   testWidgets('first launch asks for level before key', (tester) async {
     final model = AppModel(
-      store: LessonStore(clock: () => DateTime(2026, 1, 1)),
+      store: fixtureStore(clock: () => DateTime(2026, 1, 1)),
       poster: ThrowingPoster(),
     );
     await tester.pumpWidget(EnglishApp(model: model));
     expect(find.text('先选一个水平'), findsOneWidget);
-    expect(find.text('新手'), findsOneWidget);
+    expect(find.text('入门'), findsOneWidget);
     expect(find.text('今天'), findsNothing);
-    await tester.tap(find.text('新手'));
+    await tester.tap(find.text('入门'));
     await tester.pumpAndSettle();
     expect(find.text('测试连接'), findsOneWidget);
     expect(find.text('先看看，稍后再填密钥'), findsOneWidget);
@@ -28,11 +29,11 @@ void main() {
 
   testWidgets('browse without key reaches shell tabs', (tester) async {
     final model = AppModel(
-      store: LessonStore(clock: () => DateTime(2026, 1, 1)),
+      store: fixtureStore(clock: () => DateTime(2026, 1, 1)),
       poster: ThrowingPoster(),
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('新手'));
+    await tester.tap(find.text('入门'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('先看看，稍后再填密钥'));
     await tester.pumpAndSettle();
@@ -44,9 +45,11 @@ void main() {
 
 
   testWidgets('我的 shows product level labels and tomorrow tip when frozen', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1))
-      ..levelChosen = true
-      ..level = '日常交流';
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 1, 1),
+      levelChosen: true,
+      level: '入门',
+    );
     store.ensureTodayPlan();
     final model = AppModel(
       store: store,
@@ -64,9 +67,9 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
-    expect(find.text('新手'), findsWidgets);
-    expect(find.text('简单工作对话'), findsOneWidget);
-    expect(find.text('更长的表达'), findsOneWidget);
+    expect(find.text('入门'), findsWidgets);
+    expect(find.text('基础'), findsOneWidget);
+    expect(find.text('进阶'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.textContaining('今天的计划已定'),
       120,
@@ -76,8 +79,10 @@ void main() {
   });
 
   testWidgets('a saved key shows four tabs and the home label', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1))
-      ..levelChosen = true;
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 1, 1),
+      levelChosen: true,
+    );
     final model = AppModel(
       store: store,
       poster: ThrowingPoster(),
@@ -99,7 +104,7 @@ void main() {
   });
 
   testWidgets('home labels follow the real store', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 7, 1))..levelChosen = true;
+    final store = fixtureStore(clock: () => DateTime(2026, 7, 1), levelChosen: true);
     final model = AppModel(
       store: store,
       poster: ThrowingPoster(),
@@ -154,7 +159,7 @@ void main() {
   });
 
   testWidgets('认词 accepts a padded answer with no network', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1))..levelChosen = true;
+    final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
     final poster = RecordingPoster();
     final model = AppModel(
       store: store,
@@ -165,21 +170,23 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    expect(find.text('站会'), findsOneWidget);
+    expect(find.text('喂；嘿'), findsOneWidget);
     expect(find.text('提交认词'), findsOneWidget);
     final fields = find.byType(TextField);
-    await tester.enterText(fields.at(0), '  STANDUP  ');
+    await tester.enterText(fields.at(0), '  HELLO  ');
     await tester.tap(find.text('提交认词'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('standup'), findsWidgets);
+    expect(find.textContaining('hello'), findsWidgets);
     expect(poster.calls, isEmpty);
-    expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
+    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
     expect(store.progressJson().contains('apiKey'), isFalse);
   });
 
   testWidgets('quiz corrections use the real grade parser', (tester) async {
-    final store = LessonStore(clock: () => DateTime(2026, 9, 1))
-      ..levelChosen = true;
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 9, 1),
+      levelChosen: true,
+    );
     store.ensureTodayPlan();
     for (var i = 0; i < 4; i++) {
       store.submitVocab(store.word(store.currentVocabId!)!.en);
@@ -229,11 +236,11 @@ void main() {
   testWidgets('测试连接 shows progress, then the result', (tester) async {
     final poster = HeldPoster();
     final model = AppModel(
-      store: LessonStore(clock: () => DateTime(2026, 1, 2)),
+      store: fixtureStore(clock: () => DateTime(2026, 1, 2)),
       poster: poster,
     );
     await tester.pumpWidget(EnglishApp(model: model));
-    await tester.tap(find.text('新手'));
+    await tester.tap(find.text('入门'));
     await tester.pumpAndSettle();
     await tester.enterText(_keyField, 'sk-test');
     await tester.tap(find.text('测试连接'));
@@ -265,7 +272,7 @@ void main() {
   testWidgets('closing 认词 shows the saved result without grading again', (
     tester,
   ) async {
-    final store = LessonStore(clock: () => DateTime(2026, 1, 1))..levelChosen = true;
+    final store = fixtureStore(clock: () => DateTime(2026, 1, 1), levelChosen: true);
     final poster = RecordingPoster();
     final model = AppModel(
       store: store,
@@ -276,12 +283,12 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.text('开始今天'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField).at(0), '  STANDUP  ');
+    await tester.enterText(find.byType(TextField).at(0), '  HELLO  ');
     await tester.tap(find.text('提交认词'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('standup'), findsWidgets);
-    expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
-    expect(store.successStage('s01'), 1);
+    expect(find.textContaining('hello'), findsWidgets);
+    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
 
     await tester.tap(find.byIcon(Icons.close));
     await tester.pumpAndSettle();
@@ -290,14 +297,14 @@ void main() {
     await tester.tap(find.text('继续认词'));
     await tester.pumpAndSettle();
     expect(find.text('提交认词'), findsOneWidget);
-    expect(store.successReviewOn('s01'), DateTime(2026, 1, 3));
-    expect(store.successStage('s01'), 1);
+    expect(store.successReviewOn('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 1, 3));
+    expect(store.successStage('cc_a1_hello_noun_ce4a5e'), 1);
     expect(poster.calls, isEmpty);
   });
 
   testWidgets('closing 错词 keeps the saved interval', (tester) async {
     var day = DateTime(2026, 2, 1);
-    final store = LessonStore(clock: () => day)..levelChosen = true;
+    final store = fixtureStore(clock: () => day, levelChosen: true);
     store.ensureTodayPlan();
     store.submitVocab('wrong');
     day = DateTime(2026, 2, 2);
@@ -310,13 +317,13 @@ void main() {
     await tester.pumpWidget(EnglishApp(model: model));
     await tester.tap(find.textContaining('错词 1'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byKey(const Key('answer')), 'standup');
+    await tester.enterText(find.byKey(const Key('answer')), 'hello');
     await tester.tap(find.text('提交'));
     await tester.pump();
     expect(find.text('对了'), findsOneWidget);
     expect(find.text('3 天后再出现'), findsOneWidget);
     expect(find.text('下一条'), findsOneWidget);
-    expect(store.nextErrorReview('s01'), DateTime(2026, 2, 5));
+    expect(store.nextErrorReview('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 2, 5));
 
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
@@ -326,7 +333,7 @@ void main() {
     expect(find.text('下一条'), findsOneWidget);
     expect(find.text('3 天后再出现'), findsOneWidget);
     expect(find.text('提交'), findsNothing);
-    expect(store.nextErrorReview('s01'), DateTime(2026, 2, 5));
+    expect(store.nextErrorReview('cc_a1_hello_noun_ce4a5e'), DateTime(2026, 2, 5));
   });
 }
 

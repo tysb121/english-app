@@ -51,7 +51,7 @@ class CefrCoreBook {
   }
 }
 
-/// Loads [assets/wordbooks/cefr_core.json]. Not wired into [LessonStore] yet.
+/// Loads [assets/wordbooks/cefr_core.json] for [LessonStore].
 Future<CefrCoreBook> loadCefrCore({
   AssetBundle? bundle,
   String assetPath = 'assets/wordbooks/cefr_core.json',

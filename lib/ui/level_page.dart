@@ -8,19 +8,19 @@ class LevelPage extends StatelessWidget {
 
   static const _options = [
     (
-      '新手',
-      "I'm running late. 要迟到了",
+      '入门',
+      'A1 · hello / good / day',
       Icons.emoji_emotions_outlined,
     ),
     (
-      '简单工作对话',
-      "Let's start the standup. 我们开始站会。",
-      Icons.work_outline_rounded,
+      '基础',
+      'A2 · although / appear / around',
+      Icons.menu_book_outlined,
     ),
     (
-      '更长的表达',
-      "Let's take this offline. 会下再说。",
-      Icons.record_voice_over_outlined,
+      '进阶',
+      'B1 · abandon / absorb / access',
+      Icons.school_outlined,
     ),
   ];
 
@@ -38,7 +38,7 @@ class LevelPage extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           const Text(
-            '决定从哪一档说法开始。今天的计划冻住后，改水平从明天生效。',
+            '决定从哪一档 CEFR 词开始。今天的计划冻住后，改水平从明天生效。',
             style: TextStyle(color: muted, height: 1.45),
           ),
           const SizedBox(height: 16),
