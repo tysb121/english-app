@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../engine/api_requests.dart';
+import '../engine/chat_thread.dart';
 import '../engine/lesson_store.dart';
 import '../engine/prompts.dart';
 import '../net/chat_reply.dart';
@@ -13,6 +14,7 @@ class AppModel extends ChangeNotifier {
   AppModel({
     required this.store,
     required this.poster,
+    this.chat,
     this.deepSeekKey = '',
     this.deepSeekBase = 'https://api.deepseek.com',
     this.deepSeekModel = 'deepseek-flash',
@@ -26,6 +28,7 @@ class AppModel extends ChangeNotifier {
 
   final LessonStore store;
   final Poster poster;
+  final ChatThread? chat;
   String deepSeekKey;
   String deepSeekBase;
   String deepSeekModel;
