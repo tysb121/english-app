@@ -170,3 +170,38 @@ ApiCall deepSeekSummarize({
     ],
   );
 }
+
+/// Teacher turn: tools on, no JSON response format. Thinking stays off.
+ApiCall deepSeekAgentChat({
+  required String apiKey,
+  required List<Map<String, Object?>> messages,
+  required List<Map<String, Object?>> tools,
+  String baseUrl = 'https://api.deepseek.com',
+  String model = 'deepseek-flash',
+  String? userId,
+  bool stream = true,
+  int maxTokens = 800,
+}) {
+  final root = baseUrl.endsWith('/')
+      ? baseUrl.substring(0, baseUrl.length - 1)
+      : baseUrl;
+  final thinking = deepSeekThinkingFields('off');
+  return ApiCall(
+    uri: Uri.parse('$root$deepSeekChatPath'),
+    headers: {
+      'Authorization': 'Bearer $apiKey',
+      'Content-Type': 'application/json',
+    },
+    body: {
+      'model': model,
+      'messages': messages,
+      'stream': stream,
+      'temperature': 0.4,
+      'max_tokens': maxTokens,
+      'tools': tools,
+      ...thinking,
+      if (stream) 'stream_options': {'include_usage': true},
+      if (userId != null && userId.isNotEmpty) 'user_id': userId,
+    },
+  );
+}

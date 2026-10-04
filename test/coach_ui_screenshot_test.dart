@@ -41,20 +41,10 @@ void main() {
       await tester.pumpWidget(EnglishApp(model: model));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('今日练习的词'), findsOneWidget);
-      expect(find.textContaining('还没看'), findsOneWidget);
-      for (final id in ids) {
-        final word = store.word(id)!;
-        expect(find.text(word.en), findsWidgets);
-        expect(find.textContaining(word.cn), findsWidgets);
-      }
-      await tester.tap(find.text('开始练习'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      expect(find.text('跟教练练习'), findsOneWidget);
-      expect(find.textContaining('今天的词在首页'), findsOneWidget);
-      // Progress kept; no mini word-card wall of EN titles as cards.
-      expect(find.textContaining('还差'), findsWidgets);
+      expect(find.text('上课'), findsOneWidget);
+      expect(find.text('先到这'), findsOneWidget);
+      expect(find.text('今日练习的词'), findsNothing);
+      expect(find.textContaining('看过了'), findsNothing);
     },
   );
 

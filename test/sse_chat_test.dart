@@ -15,11 +15,13 @@ void main() {
     );
     expect(reasoning?.reasoningDelta, '先想一步');
     expect(reasoning?.contentDelta, isNull);
+    expect(reasoning?.toolCallDeltas, isEmpty);
 
     final content = parseSseDataPayload(
       '{"choices":[{"delta":{"content":"你好"},"finish_reason":null}]}',
     );
     expect(content?.contentDelta, '你好');
+    expect(content?.toolCallDeltas, isEmpty);
 
     final done = parseSseDataPayload('[DONE]');
     expect(done?.finishReason, 'stop');
@@ -42,6 +44,57 @@ data: [DONE]
     expect(folded.content, 'Hi');
     expect(folded.finishReason, 'stop');
     expect(folded.totalTokens, 42);
+  });
+
+  test('assembleToolCalls joins streamed argument fragments', () {
+    final first = parseSseDataPayload(
+      r'{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"present_card","arguments":"{\"word\":"}}]}}]}',
+    );
+    final second = parseSseDataPayload(
+      r'{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"apple\"}"}}]}}]}',
+    );
+    expect(first?.toolCallDeltas.single.id, 'call_1');
+    expect(first?.toolCallDeltas.single.name, 'present_card');
+    expect(first?.toolCallDeltas.single.argumentsDelta, '{"word":');
+    expect(second?.toolCallDeltas.single.argumentsDelta, '"apple"}');
+    final calls = assembleToolCalls([first!, second!]);
+    expect(calls, hasLength(1));
+    expect(calls.single.index, 0);
+    expect(calls.single.id, 'call_1');
+    expect(calls.single.name, 'present_card');
+    expect(calls.single.arguments, '{"word":"apple"}');
+  });
+
+  test('finish_reason tool_calls is read as done', () {
+    final event = parseSseDataPayload(
+      r'{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}',
+    );
+    expect(event?.finishReason, 'tool_calls');
+    expect(event?.isDone, isTrue);
+    expect(event?.isError, isFalse);
+    expect(event?.toolCallDeltas, isEmpty);
+  });
+
+  test('non-stream message.tool_calls assemble from one payload', () {
+    final event = parseSseDataPayload(
+      r'{"choices":[{"message":{"role":"assistant","content":null,"tool_calls":[{"id":"call_2","type":"function","function":{"name":"grade","arguments":"{\"ok\":true}"}}]},"finish_reason":"tool_calls"}]}',
+    );
+    expect(event?.contentDelta, isNull);
+    expect(event?.finishReason, 'tool_calls');
+    final calls = assembleToolCalls([event!]);
+    expect(calls, hasLength(1));
+    expect(calls.single.index, 0);
+    expect(calls.single.id, 'call_2');
+    expect(calls.single.name, 'grade');
+    expect(calls.single.arguments, '{"ok":true}');
+  });
+
+  test('payload without tools keeps empty toolCallDeltas and content', () {
+    final content = parseSseDataPayload(
+      '{"choices":[{"delta":{"content":"你好"},"finish_reason":null}]}',
+    );
+    expect(content?.toolCallDeltas, isEmpty);
+    expect(content?.contentDelta, '你好');
   });
 
   test('deepSeekThinkingFields maps UI effort to API', () {

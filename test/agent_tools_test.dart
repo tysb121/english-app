@@ -1,0 +1,334 @@
+import 'dart:convert';
+
+import 'package:english_app/engine/agent_tools.dart';
+import 'package:english_app/engine/gradebook.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  test('agentToolSchemas lists the ten teacher tools', () {
+    expect(
+      [for (final tool in agentToolSchemas) (tool['function'] as Map)['name']],
+      [
+        'get_learner',
+        'get_due_items',
+        'get_recent_attempts',
+        'get_error_patterns',
+        'add_item',
+        'set_plan',
+        'record_attempt',
+        'note_fact',
+        'end_class',
+        'present_card',
+      ],
+    );
+    for (final tool in agentToolSchemas) {
+      expect(tool['type'], 'function');
+      final function = tool['function']! as Map;
+      expect(function['description'], isA<String>());
+      expect(function['parameters'], isA<Map>());
+    }
+  });
+
+  test('record_attempt stores the pending text and rejects a second write', () {
+    final book = Gradebook(ids: _ids('item'));
+    final item = book.addItem(
+      promptCn: '问好',
+      targetEn: 'Hello there',
+      difficulty: 1,
+    );
+    final blocked = runTool(
+      name: 'set_plan',
+      args: {
+        'item_id': item.id,
+        'status': '会用',
+        'due_at': '2026-12-01T00:00:00.000',
+      },
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(blocked.ok, isFalse);
+    expect(item.status, ItemStatus.unseen);
+    expect(item.dueAt, isNull);
+
+    final pending = PendingSubmission(
+      text: 'student sentence',
+      optionId: 'opt-1',
+    );
+    final recorded = runTool(
+      name: 'record_attempt',
+      args: {
+        'item_id': item.id,
+        'submission': 'model rewritten',
+        'option_id': 'zzz',
+        'text': 'also wrong',
+        'pass': true,
+        'error_tag': '',
+        'corrected_en': 'Hello there',
+        'revealed': false,
+      },
+      book: book,
+      pending: pending,
+      cardPending: false,
+      classId: 'class-9',
+    );
+    expect(recorded.ok, isTrue);
+    expect(pending.consumed, isTrue);
+    expect(book.attempts, hasLength(1));
+    expect(book.attempts.single.submission, 'student sentence');
+    expect(book.attempts.single.optionId, 'opt-1');
+    expect(book.attempts.single.pass, isTrue);
+    expect(book.attempts.single.revealed, isFalse);
+    expect(book.attempts.single.classId, 'class-9');
+    expect(book.items.single.lastSubmission, 'student sentence');
+    expect(
+      book.attempts.single.submission.contains('model rewritten'),
+      isFalse,
+    );
+
+    final again = runTool(
+      name: 'record_attempt',
+      args: {
+        'item_id': item.id,
+        'pass': false,
+        'error_tag': '语序',
+        'corrected_en': 'Hello',
+        'revealed': false,
+        'submission': 'second fake',
+      },
+      book: book,
+      pending: pending,
+      cardPending: false,
+    );
+    expect(again.ok, isFalse);
+    expect(book.attempts, hasLength(1));
+    expect(book.items.single.lastSubmission, 'student sentence');
+
+    final marked = runTool(
+      name: 'set_plan',
+      args: {'item_id': item.id, 'status': '会用'},
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(marked.ok, isTrue);
+    expect(item.status, ItemStatus.canUse);
+  });
+
+  test('present_card rejects a short choice and a second card', () {
+    final book = Gradebook(
+      clock: () => DateTime(2026, 10, 4, 12),
+      ids: _ids('item'),
+    );
+    final choice = runTool(
+      name: 'present_card',
+      args: {
+        'kind': 'choice',
+        'prompt': 'Pick one',
+        'answer': 'secret',
+        'options': [
+          {'id': 'a', 'text': 'A'},
+        ],
+      },
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(choice.ok, isFalse);
+    expect(choice.card, isNull);
+    final choiceBody = jsonDecode(choice.content) as Map;
+    expect(choiceBody['ok'], isFalse);
+    expect(choiceBody['error'], isA<String>());
+
+    final leaked = runTool(
+      name: 'present_card',
+      args: {
+        'kind': 'judge',
+        'prompt': 'Is this ok?',
+        'correct': 'y',
+        'options': [
+          {'id': 'y', 'text': '对'},
+          {'id': 'n', 'text': '不对'},
+        ],
+      },
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(leaked.ok, isFalse);
+    expect(leaked.card, isNull);
+
+    final duplicated = runTool(
+      name: 'present_card',
+      args: {
+        'kind': 'choice',
+        'prompt': 'Pick',
+        'options': [
+          {'id': 'a', 'text': 'One'},
+          {'id': 'a', 'text': 'Two'},
+        ],
+      },
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(duplicated.ok, isFalse);
+    expect(duplicated.card, isNull);
+
+    final blankWithOptions = runTool(
+      name: 'present_card',
+      args: {
+        'kind': 'blank',
+        'prompt': 'Write it',
+        'options': [
+          {'id': 'a', 'text': 'nope'},
+        ],
+      },
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(blankWithOptions.ok, isFalse);
+    expect(blankWithOptions.card, isNull);
+
+    final judge = runTool(
+      name: 'present_card',
+      args: {
+        'id': 'card-judge',
+        'kind': 'judge',
+        'prompt': 'Is this ok?',
+        'options': [
+          {'id': 'y', 'text': '对'},
+          {'id': 'n', 'text': '不对'},
+        ],
+      },
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(judge.ok, isTrue);
+    expect(judge.card, isNotNull);
+    expect(judge.card!.kind, CardKind.judge);
+    expect(judge.card!.id, 'card-judge');
+    expect(judge.card!.options, hasLength(2));
+    expect(judge.card!.options[0].text, '对');
+    expect(jsonDecode(judge.content), {'ok': true, 'waiting': true});
+    expect(judge.endClass, isFalse);
+
+    final blocked = runTool(
+      name: 'present_card',
+      args: {
+        'kind': 'judge',
+        'prompt': 'Again?',
+        'options': [
+          {'id': 'y', 'text': '对'},
+          {'id': 'n', 'text': '不对'},
+        ],
+      },
+      book: book,
+      pending: null,
+      cardPending: true,
+    );
+    expect(blocked.ok, isFalse);
+    expect(blocked.card, isNull);
+
+    final blank = runTool(
+      name: 'present_card',
+      args: {'kind': 'blank', 'prompt': 'Write it', 'placeholder': '英文'},
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(blank.ok, isTrue);
+    expect(blank.card!.kind, CardKind.blank);
+    expect(blank.card!.options, isEmpty);
+    expect(blank.card!.placeholder, '英文');
+    expect(blank.card!.id.startsWith('card'), isTrue);
+  });
+
+  test('queries use the gradebook clock and end_class keeps the book', () {
+    final clock = DateTime(2099, 1, 2, 3, 4);
+    final book = Gradebook(clock: () => clock, ids: _ids('item'));
+    book.noteFact('name', '周');
+    final due = book.addItem(promptCn: '到期', targetEn: 'Due', difficulty: 2);
+    book.setPlan(itemId: due.id, dueAt: clock);
+    final later = book.addItem(
+      promptCn: '以后',
+      targetEn: 'Later',
+      difficulty: 4,
+    );
+    book.setPlan(
+      itemId: later.id,
+      dueAt: clock.add(const Duration(minutes: 1)),
+    );
+
+    final found = runTool(
+      name: 'get_due_items',
+      args: {},
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    final foundBody = jsonDecode(found.content) as Map;
+    expect(found.ok, isTrue);
+    expect(foundBody['items'], hasLength(1));
+    expect((foundBody['items'] as List).first['id'], due.id);
+
+    final early = runTool(
+      name: 'get_due_items',
+      args: {},
+      book: book,
+      pending: null,
+      cardPending: false,
+      now: clock.subtract(const Duration(days: 1)),
+    );
+    expect((jsonDecode(early.content) as Map)['items'], isEmpty);
+
+    final learner = jsonDecode(
+      runTool(
+        name: 'get_learner',
+        args: {},
+        book: book,
+        pending: null,
+        cardPending: false,
+      ).content,
+    ) as Map;
+    expect(learner['name'], '周');
+    expect(learner['current_item']['target_en'], 'Later');
+
+    final before = book.attempts.length;
+    final ended = runTool(
+      name: 'end_class',
+      args: {'close_note': '模型想写的收课条'},
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(ended.ok, isTrue);
+    expect(ended.endClass, isTrue);
+    expect(book.attempts, hasLength(before));
+    expect(book.items, hasLength(2));
+    final endedBody = jsonDecode(ended.content) as Map;
+    expect((endedBody['close_note'] as String).split('\n'), hasLength(3));
+    expect(endedBody['model_close_note'], '模型想写的收课条');
+
+    final unknown = runTool(
+      name: 'make_homework',
+      args: {},
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(unknown.ok, isFalse);
+    expect(unknown.card, isNull);
+    expect(jsonDecode(unknown.content), {'ok': false, 'error': '未知工具'});
+  });
+}
+
+IdFactory _ids(String prefix) {
+  var n = 0;
+  return () {
+    n += 1;
+    return '$prefix-$n';
+  };
+}

@@ -1,9 +1,38 @@
 import 'dart:convert';
 
+class ToolCallDelta {
+  final int index;
+  final String? id;
+  final String? name;
+  final String? argumentsDelta;
+
+  const ToolCallDelta({
+    required this.index,
+    this.id,
+    this.name,
+    this.argumentsDelta,
+  });
+}
+
+class AssembledToolCall {
+  final int index;
+  final String id;
+  final String name;
+  final String arguments;
+
+  const AssembledToolCall({
+    required this.index,
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+}
+
 /// One SSE /chat/completions event after `data: ` is stripped.
 class SseChatEvent {
   final String? reasoningDelta;
   final String? contentDelta;
+  final List<ToolCallDelta> toolCallDeltas;
   final String? finishReason;
   final int? totalTokens;
   final int? httpStatus;
@@ -12,6 +41,7 @@ class SseChatEvent {
   const SseChatEvent({
     this.reasoningDelta,
     this.contentDelta,
+    this.toolCallDeltas = const [],
     this.finishReason,
     this.totalTokens,
     this.httpStatus,
@@ -28,6 +58,52 @@ int? _usageTotal(Object? usage) {
   if (total is int) return total;
   if (total is num) return total.toInt();
   return null;
+}
+
+String? _nonEmptyString(Object? raw) {
+  if (raw is String && raw.isNotEmpty) return raw;
+  return null;
+}
+
+int _toolIndex(Object? raw, int fallback) {
+  if (raw is int) return raw;
+  if (raw is num) return raw.toInt();
+  return fallback;
+}
+
+/// Fragments from `delta.tool_calls` or `message.tool_calls`. Arguments stay raw pieces.
+List<ToolCallDelta> _toolCallDeltas(Object? raw) {
+  if (raw is! List) return const [];
+  final out = <ToolCallDelta>[];
+  for (var i = 0; i < raw.length; i++) {
+    final item = raw[i];
+    if (item is! Map) continue;
+    final id = _nonEmptyString(item['id']);
+    String? name;
+    String? argumentsDelta;
+    final function = item['function'];
+    if (function is Map) {
+      name = _nonEmptyString(function['name']);
+      final args = function['arguments'];
+      if (args is String && args.isNotEmpty) argumentsDelta = args;
+    }
+    if (id == null && name == null && argumentsDelta == null) continue;
+    out.add(ToolCallDelta(
+      index: _toolIndex(item['index'], i),
+      id: id,
+      name: name,
+      argumentsDelta: argumentsDelta,
+    ));
+  }
+  return out;
+}
+
+List<ToolCallDelta> _readToolCallDeltas(Object? delta, Object? message) {
+  final fromDelta = delta is Map ? _toolCallDeltas(delta['tool_calls']) : const <ToolCallDelta>[];
+  final fromMessage = message is Map ? _toolCallDeltas(message['tool_calls']) : const <ToolCallDelta>[];
+  if (fromDelta.isEmpty) return fromMessage;
+  if (fromMessage.isEmpty) return fromDelta;
+  return [...fromDelta, ...fromMessage];
 }
 
 /// Parse one `data:` payload (JSON object or `[DONE]`).
@@ -69,6 +145,7 @@ SseChatEvent? parseSseDataPayload(String payload) {
     return SseChatEvent(
       reasoningDelta: reasoning,
       contentDelta: content,
+      toolCallDeltas: _readToolCallDeltas(delta, message),
       finishReason: finish is String ? finish : null,
       totalTokens: usageTokens,
     );
@@ -131,4 +208,35 @@ StreamedChatResult foldSseEvents(Iterable<SseChatEvent> events, {int status = 20
     totalTokens: tokens,
     status: status,
   );
+}
+
+/// Join tool-call fragments by index. Later non-empty id and name replace earlier ones.
+List<AssembledToolCall> assembleToolCalls(Iterable<SseChatEvent> events) {
+  final ids = <int, String>{};
+  final names = <int, String>{};
+  final arguments = <int, StringBuffer>{};
+  final seen = <int>{};
+  for (final event in events) {
+    for (final delta in event.toolCallDeltas) {
+      seen.add(delta.index);
+      final id = delta.id;
+      if (id != null && id.isNotEmpty) ids[delta.index] = id;
+      final name = delta.name;
+      if (name != null && name.isNotEmpty) names[delta.index] = name;
+      final piece = delta.argumentsDelta;
+      if (piece != null) {
+        (arguments[delta.index] ??= StringBuffer()).write(piece);
+      }
+    }
+  }
+  final indexes = seen.toList()..sort();
+  return [
+    for (final index in indexes)
+      AssembledToolCall(
+        index: index,
+        id: ids[index] ?? '',
+        name: names[index] ?? '',
+        arguments: arguments[index]?.toString() ?? '',
+      ),
+  ];
 }

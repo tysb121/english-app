@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../app/app_model.dart';
-import 'level_page.dart';
+import 'class_page.dart';
 import 'records_page.dart';
 import 'settings_page.dart';
 import 'theme.dart';
-import 'today_page.dart';
 import 'words_page.dart';
 import '../update/update_ui.dart';
 
@@ -45,22 +44,15 @@ class RootPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
-    final Widget page;
-    if (!model.store.levelChosen) {
-      page = const LevelPage();
-    } else if (!model.unlocked) {
-      page = const SettingsPage(gate: true);
-    } else {
-      page = const HomeShell();
-    }
+    final page = model.unlocked
+        ? const HomeShell()
+        : const SettingsPage(gate: true);
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 320),
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       child: KeyedSubtree(
-        key: ValueKey(
-          '${model.store.levelChosen}-${model.unlocked}',
-        ),
+        key: ValueKey(model.unlocked),
         child: page,
       ),
     );
@@ -92,7 +84,7 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   static const _pages = [
-    TodayPage(),
+    ClassPage(),
     WordsPage(),
     RecordsPage(),
     SettingsPage(),

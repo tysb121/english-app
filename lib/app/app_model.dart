@@ -4,10 +4,12 @@ import 'package:flutter/foundation.dart';
 
 import '../engine/api_requests.dart';
 import '../engine/chat_thread.dart';
+import '../engine/class_session.dart';
 import '../engine/lesson_store.dart';
 import '../engine/prompts.dart';
 import '../net/chat_reply.dart';
 import '../net/poster.dart';
+import 'class_coach.dart';
 import 'secrets.dart';
 
 class AppModel extends ChangeNotifier {
@@ -21,7 +23,10 @@ class AppModel extends ChangeNotifier {
     this.unlocked = false,
     this.persistProgress,
     this.persistSecrets,
-  });
+    this.persistStudy,
+  }) {
+    classCoach = ClassCoach(this);
+  }
 
   final LessonStore store;
   final Poster poster;
@@ -32,6 +37,8 @@ class AppModel extends ChangeNotifier {
   bool unlocked;
   final void Function(String json)? persistProgress;
   final void Function(SavedSecrets secrets)? persistSecrets;
+  final void Function()? persistStudy;
+  late final ClassCoach classCoach;
 
   bool connectionOk = false;
   String? connectionMessage;
@@ -54,14 +61,32 @@ class AppModel extends ChangeNotifier {
   /// UI-only refresh (e.g. stream tokens) without rewriting progress.
   void tick() => notifyListeners();
 
+  void noteStudyChanged() {
+    final save = persistStudy;
+    if (save != null) {
+      try {
+        save();
+      } on Object {
+        // Disk errors must not roll back an answer already held in memory.
+      }
+    }
+    notifyListeners();
+  }
+
+  void adoptStudyLog(StudyLog next) {
+    classCoach.replaceLog(next);
+  }
+
   /// Clear lesson progress + coach chat (keys/settings kept). Persists via [commit].
   Future<void> clearLocalLearning() async {
     store.clearLearningProgress();
     chat?.clear();
+    classCoach.clearLearning();
     connectionOk = false;
     connectionMessage = null;
     await store.ensureTodayPlanAsync();
     commit();
+    noteStudyChanged();
   }
 
   void unlock() {

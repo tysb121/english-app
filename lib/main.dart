@@ -62,9 +62,11 @@ Future<void> main() async {
   await store.refreshUntaughtInLevelCount();
 
   Timer? persistDebounce;
+  late final AppModel model;
   Future<void> persist() async {
     try {
       await coachDb.saveShell(shell);
+      await coachDb.saveStudyLog(model.classCoach.log);
     } on Object {
       // Disk errors must not roll back in-memory answers.
     }
@@ -77,7 +79,7 @@ Future<void> main() async {
     });
   }
 
-  final model = AppModel(
+  model = AppModel(
     store: store,
     poster: IoPoster(),
     chat: shell.chat,
@@ -90,7 +92,13 @@ Future<void> main() async {
       schedulePersist();
     },
     persistSecrets: SecureSecrets().save,
+    persistStudy: schedulePersist,
   );
+  try {
+    model.adoptStudyLog(await coachDb.loadStudyLog());
+  } on Object {
+    // A missing or older study log starts a fresh class.
+  }
   if (!hadSqlite) {
     await persist();
   }

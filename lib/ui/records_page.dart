@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../engine/chat_message.dart';
 import '../engine/lesson_store.dart';
 import 'english_app.dart';
 import 'theme.dart';
@@ -9,79 +10,108 @@ class RecordsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final store = AppScope.of(context).store;
-    final days = store.history;
+    final model = AppScope.of(context);
+    final classes = model.classCoach.log.classes.reversed.toList();
     return SoftScaffold(
       title: '记录',
-      body: days.isEmpty
+      body: classes.isEmpty
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
                 child: EmptyHint(
                   icon: Icons.calendar_month_outlined,
-                  title: '还没有练习记录',
-                  subtitle: '完成今天的认词、造句和短对话后，会显示在这里。',
+                  title: '还没有上课记录',
+                  subtitle: '上完一节，收课条会出现在这里。点开只看，不再请求老师。',
                 ),
               ),
             )
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
-                for (final plan in days)
+                for (final item in classes)
                   AppCard(
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder: (_) => RecordDetailPage(day: plan.date),
+                          builder: (_) => ClassRecordPage(classId: item.id),
                         ),
                       );
                     },
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: (store.planComplete(plan) ? pine : muted)
-                                .withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          child: Icon(
-                            store.planComplete(plan)
-                                ? Icons.check_circle_rounded
-                                : Icons.radio_button_unchecked,
-                            color: store.planComplete(plan) ? pine : muted,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                store.formatDay(plan.date),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                plan.scene?.scenarioCn ?? '还没有场景',
-                                style: const TextStyle(color: muted, fontSize: 13),
-                              ),
-                            ],
-                          ),
-                        ),
                         Text(
-                          store.planComplete(plan) ? '完成' : '未完成',
-                          style: TextStyle(
-                            color: store.planComplete(plan) ? pine : muted,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
+                          _stamp(item.startedAt),
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
                           ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.closeNote.trim().isEmpty ? '这一节还开着' : item.closeNote,
+                          style: const TextStyle(color: muted, fontSize: 13),
                         ),
                       ],
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+String _stamp(DateTime value) {
+  final local = value.toLocal();
+  String two(int n) => n.toString().padLeft(2, '0');
+  return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
+}
+
+class ClassRecordPage extends StatelessWidget {
+  const ClassRecordPage({super.key, required this.classId});
+
+  final String classId;
+
+  @override
+  Widget build(BuildContext context) {
+    final classes = AppScope.of(context).classCoach.log.classes;
+    final match = classes.where((item) => item.id == classId);
+    final item = match.isEmpty ? null : match.first;
+    return SoftScaffold(
+      title: '这一节',
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      body: item == null
+          ? const Center(child: Text('这节课不在了'))
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              children: [
+                if (item.closeNote.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Text(item.closeNote, style: const TextStyle(color: muted)),
+                  ),
+                for (final message in item.messages)
+                  Align(
+                    alignment: message.role == ChatRole.user
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      constraints: const BoxConstraints(maxWidth: 320),
+                      decoration: BoxDecoration(
+                        color: message.role == ChatRole.user ? pine : mist,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        message.content,
+                        style: TextStyle(
+                          color: message.role == ChatRole.user ? Colors.white : ink,
+                        ),
+                      ),
                     ),
                   ),
               ],

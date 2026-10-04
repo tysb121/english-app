@@ -8,11 +8,20 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi, sqfliteFfiInit;
 
 import '../data/cefr_core.dart';
+import '../engine/chat_context.dart';
+import '../engine/chat_message.dart';
+import '../engine/class_session.dart';
+import '../engine/gradebook.dart';
 import 'local_progress.dart';
 import 'progress_shell.dart';
 
 const coachDbFileName = 'english_coach.db';
-const coachSchemaVersion = 2;
+const coachSchemaVersion = 3;
+
+const _learnerNameKey = 'learner_name';
+const _learnerJobKey = 'learner_job';
+const _learnerGoalKey = 'learner_goal';
+const _learnerCurrentItemKey = 'learner_current_item';
 
 bool _factoryReady = false;
 
@@ -61,6 +70,9 @@ class CoachDatabase {
         onUpgrade: (db, oldVersion, newVersion) async {
           if (oldVersion < 2) {
             await _ensureWordbookIndexes(db);
+          }
+          if (oldVersion < 3) {
+            await _createStudyTables(db);
           }
         },
       ),
@@ -150,12 +162,64 @@ CREATE TABLE chat_checkpoints (
 )''');
     await db.insert('meta', {'key': 'schema', 'value': '$coachSchemaVersion'});
     await _ensureWordbookIndexes(db);
+    await _createStudyTables(db);
   }
 
   static Future<void> _ensureWordbookIndexes(Database db) async {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_wordbook_level ON wordbook(level)',
     );
+  }
+
+  static Future<void> _createStudyTables(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS study_items (
+  id TEXT PRIMARY KEY NOT NULL,
+  prompt_cn TEXT NOT NULL,
+  target_en TEXT NOT NULL,
+  difficulty INTEGER NOT NULL,
+  status TEXT NOT NULL,
+  due_at TEXT,
+  last_error_tag TEXT,
+  last_submission TEXT,
+  corrected_en TEXT,
+  reason TEXT
+)''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS study_attempts (
+  id TEXT PRIMARY KEY NOT NULL,
+  at TEXT NOT NULL,
+  class_id TEXT,
+  item_id TEXT NOT NULL,
+  submission TEXT NOT NULL,
+  option_id TEXT,
+  pass INTEGER NOT NULL,
+  error_tag TEXT NOT NULL,
+  corrected_en TEXT NOT NULL,
+  revealed INTEGER NOT NULL
+)''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS study_classes (
+  id TEXT PRIMARY KEY NOT NULL,
+  started_at TEXT NOT NULL,
+  ended_at TEXT,
+  close_note TEXT NOT NULL,
+  user_turns INTEGER NOT NULL,
+  judged INTEGER NOT NULL,
+  last_message_at TEXT
+)''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS study_class_messages (
+  class_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  payload TEXT NOT NULL,
+  PRIMARY KEY (class_id, seq)
+)''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS study_class_checkpoints (
+  class_id TEXT PRIMARY KEY NOT NULL,
+  payload TEXT NOT NULL
+)''');
   }
 
   Future<int> wordbookCount() async {
@@ -329,7 +393,17 @@ CREATE TABLE chat_checkpoints (
     final lesson = shell.store.toJson();
     final chat = shell.chat.toJson();
     await db.transaction((txn) async {
-      await txn.delete('settings');
+      // Learner facts share settings with the lesson shell. Keep them.
+      await txn.delete(
+        'settings',
+        where: 'key NOT IN (?, ?, ?, ?)',
+        whereArgs: const [
+          _learnerNameKey,
+          _learnerJobKey,
+          _learnerGoalKey,
+          _learnerCurrentItemKey,
+        ],
+      );
       await txn.delete('user_words');
       await txn.delete('day_plan');
       await txn.delete('attempts');
@@ -637,5 +711,259 @@ CREATE TABLE chat_checkpoints (
     return raw != null && raw.trim().isNotEmpty;
   }
 
+  /// Replace the on-device study log. One user, one phone: full swap is enough.
+  Future<void> saveStudyLog(StudyLog log) async {
+    final book = log.book.toJson();
+    await db.transaction((txn) async {
+      await txn.delete('study_items');
+      await txn.delete('study_attempts');
+      await txn.delete('study_classes');
+      await txn.delete('study_class_messages');
+      await txn.delete('study_class_checkpoints');
+
+      final items = book['items'];
+      if (items is List) {
+        for (final item in items) {
+          if (item is! Map) continue;
+          final id = item['id'];
+          if (id is! String || id.isEmpty) continue;
+          await txn.insert('study_items', {
+            'id': id,
+            'prompt_cn': _text(item['promptCn']),
+            'target_en': _text(item['targetEn']),
+            'difficulty': _int(item['difficulty']),
+            'status': _statusText(item['status']),
+            'due_at': _optionalText(item['dueAt']),
+            'last_error_tag': _optionalText(item['lastErrorTag']),
+            'last_submission': _optionalText(item['lastSubmission']),
+            'corrected_en': _optionalText(item['correctedEn']),
+            'reason': _optionalText(item['reason']),
+          });
+        }
+      }
+
+      final attempts = book['attempts'];
+      if (attempts is List) {
+        for (final attempt in attempts) {
+          if (attempt is! Map) continue;
+          final id = attempt['id'];
+          if (id is! String || id.isEmpty) continue;
+          await txn.insert('study_attempts', {
+            'id': id,
+            'at': _text(attempt['at']),
+            'class_id': _optionalText(attempt['classId']),
+            'item_id': _text(attempt['itemId']),
+            'submission': _text(attempt['submission']),
+            'option_id': _optionalText(attempt['optionId']),
+            'pass': _boolInt(attempt['pass']),
+            'error_tag': _text(attempt['errorTag']),
+            'corrected_en': _text(attempt['correctedEn']),
+            'revealed': _boolInt(attempt['revealed']),
+          });
+        }
+      }
+
+      for (final studyClass in log.classes) {
+        final encoded = studyClass.toJson();
+        final id = encoded['id'];
+        if (id is! String || id.isEmpty) continue;
+        await txn.insert('study_classes', {
+          'id': id,
+          'started_at': _text(encoded['startedAt']),
+          'ended_at': _optionalText(encoded['endedAt']),
+          'close_note': _text(encoded['closeNote']),
+          'user_turns': _int(encoded['userTurns']),
+          'judged': _int(encoded['judged']),
+          'last_message_at': _optionalText(encoded['lastMessageAt']),
+        });
+
+        final messages = encoded['messages'];
+        if (messages is List) {
+          var seq = 0;
+          for (final message in messages) {
+            if (message is! Map) continue;
+            await txn.insert('study_class_messages', {
+              'class_id': id,
+              'seq': seq,
+              'payload': jsonEncode(message),
+            });
+            seq += 1;
+          }
+        }
+
+        final checkpoint = encoded['checkpoint'];
+        if (checkpoint is Map) {
+          await txn.insert('study_class_checkpoints', {
+            'class_id': id,
+            'payload': jsonEncode(checkpoint),
+          });
+        }
+      }
+
+      final facts = book['facts'];
+      final factMap = facts is Map ? facts : const <String, Object?>{};
+      await _putSetting(txn, _learnerNameKey, _text(factMap['name']));
+      await _putSetting(txn, _learnerJobKey, _text(factMap['job']));
+      await _putSetting(txn, _learnerGoalKey, _text(factMap['goal']));
+      await _putSetting(
+        txn,
+        _learnerCurrentItemKey,
+        _text(factMap['currentItemId']),
+      );
+    });
+  }
+
+  /// Rebuild [StudyLog] from study tables. No rows means an empty log.
+  Future<StudyLog> loadStudyLog() async {
+    final itemRows = await db.query('study_items', orderBy: 'rowid');
+    final attemptRows = await db.query('study_attempts', orderBy: 'rowid');
+    final classRows = await db.query('study_classes', orderBy: 'rowid');
+    final messageRows = await db.query(
+      'study_class_messages',
+      orderBy: 'class_id, seq',
+    );
+    final checkpointRows = await db.query('study_class_checkpoints');
+    final settingRows = await db.query(
+      'settings',
+      where: 'key IN (?, ?, ?, ?)',
+      whereArgs: const [
+        _learnerNameKey,
+        _learnerJobKey,
+        _learnerGoalKey,
+        _learnerCurrentItemKey,
+      ],
+    );
+    final settings = {
+      for (final row in settingRows)
+        row['key']! as String: row['value']! as String,
+    };
+    final facts = <String, Object?>{
+      'name': settings[_learnerNameKey] ?? '',
+      'job': settings[_learnerJobKey] ?? '',
+      'goal': settings[_learnerGoalKey] ?? '',
+      'currentItemId': _blankToNull(settings[_learnerCurrentItemKey]),
+    };
+    final hasFacts = _text(facts['name']).isNotEmpty ||
+        _text(facts['job']).isNotEmpty ||
+        _text(facts['goal']).isNotEmpty ||
+        facts['currentItemId'] != null;
+    if (itemRows.isEmpty &&
+        attemptRows.isEmpty &&
+        classRows.isEmpty &&
+        !hasFacts) {
+      return StudyLog();
+    }
+
+    final messagesByClass = <String, List<Map<String, Object?>>>{};
+    for (final row in messageRows) {
+      final classId = row['class_id'];
+      if (classId is! String) continue;
+      final decoded = jsonDecode(row['payload']! as String);
+      final message = ChatMessage.fromJson(decoded);
+      if (message == null) continue;
+      messagesByClass.putIfAbsent(classId, () => []).add(message.toJson());
+    }
+
+    final checkpoints = <String, Map<String, Object?>>{};
+    for (final row in checkpointRows) {
+      final classId = row['class_id'];
+      if (classId is! String) continue;
+      final decoded = jsonDecode(row['payload']! as String);
+      final summary = ContextSummary.fromJson(decoded);
+      if (summary == null) continue;
+      checkpoints[classId] = summary.toJson();
+    }
+
+    final book = Gradebook();
+    book.loadJson({
+      'items': [
+        for (final row in itemRows)
+          {
+            'id': row['id'],
+            'promptCn': row['prompt_cn'],
+            'targetEn': row['target_en'],
+            'difficulty': row['difficulty'],
+            'status': row['status'],
+            'dueAt': row['due_at'],
+            'lastErrorTag': row['last_error_tag'],
+            'lastSubmission': row['last_submission'],
+            'correctedEn': row['corrected_en'],
+            'reason': row['reason'],
+          },
+      ],
+      'attempts': [
+        for (final row in attemptRows)
+          {
+            'id': row['id'],
+            'at': row['at'],
+            'classId': row['class_id'],
+            'itemId': row['item_id'],
+            'submission': row['submission'],
+            'optionId': row['option_id'],
+            'pass': (row['pass'] as int) == 1,
+            'errorTag': row['error_tag'],
+            'correctedEn': row['corrected_en'],
+            'revealed': (row['revealed'] as int) == 1,
+          },
+      ],
+      'facts': facts,
+    });
+
+    final classes = <StudyClass>[];
+    for (final row in classRows) {
+      final id = row['id'];
+      if (id is! String) continue;
+      final checkpoint = checkpoints[id];
+      final parsed = StudyClass.fromJson({
+        'id': id,
+        'startedAt': row['started_at'],
+        'endedAt': row['ended_at'],
+        'closeNote': row['close_note'],
+        'userTurns': row['user_turns'],
+        'judged': row['judged'],
+        'lastMessageAt': row['last_message_at'],
+        'messages': messagesByClass[id] ?? const <Map<String, Object?>>[],
+        if (checkpoint != null) 'checkpoint': checkpoint,
+      });
+      if (parsed != null) classes.add(parsed);
+    }
+    return StudyLog(book: book, classes: classes);
+  }
+
   Future<void> close() => db.close();
+}
+
+Future<void> _putSetting(Transaction txn, String key, String value) {
+  return txn.insert('settings', {
+    'key': key,
+    'value': value,
+  }, conflictAlgorithm: ConflictAlgorithm.replace);
+}
+
+String _text(Object? value) => value is String ? value : '';
+
+String? _optionalText(Object? value) {
+  if (value == null) return null;
+  if (value is String) return value;
+  return value.toString();
+}
+
+String? _blankToNull(String? value) {
+  if (value == null || value.isEmpty) return null;
+  return value;
+}
+
+int _int(Object? value) => value is int ? value : 0;
+
+int _boolInt(Object? value) {
+  if (value == true || value == 1) return 1;
+  return 0;
+}
+
+String _statusText(Object? value) {
+  if (value is String) {
+    final parsed = parseItemStatus(value);
+    if (parsed != null) return itemStatusLabel(parsed);
+  }
+  return '没练过';
 }
