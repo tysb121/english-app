@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:english_app/app/app_model.dart';
 import 'package:english_app/app/class_coach.dart';
 import 'package:english_app/engine/agent_loop.dart';
+import 'package:english_app/engine/class_session.dart';
 import 'package:english_app/engine/agent_tools.dart';
 import 'package:english_app/engine/api_requests.dart';
 import 'package:english_app/engine/chat_message.dart';
@@ -52,9 +53,42 @@ void main() {
         ],
       ),
       _chat(content: '对了'),
+      _chat(
+        toolCalls: [
+          _call(
+            'add_item',
+            jsonEncode({
+              'prompt_cn': '苹果',
+              'target_en': 'apple',
+              'difficulty': 1,
+            }),
+          ),
+        ],
+      ),
+      _chat(
+        toolCalls: [
+          _call(
+            'record_attempt',
+            jsonEncode({
+              'item_id': 'id-2',
+              'pass': true,
+              'corrected_en': 'apple',
+              'revealed': false,
+              'submission': '模型改写',
+            }),
+          ),
+        ],
+      ),
       _chat(content: '下一节'),
     ]);
     final coach = _coach(poster);
+    var n = 0;
+    coach.log = StudyLog(
+      ids: () {
+        n += 1;
+        return 'id-$n';
+      },
+    );
 
     await coach.ensureGreeting();
 
@@ -74,8 +108,12 @@ void main() {
     );
     expect(coach.log.classes.last.messages.single.content, '下一节');
     expect(_body(poster.calls[1]), contains('apple'));
-    expect(_body(poster.calls[2]).contains('apple'), isFalse);
-    expect(_body(poster.calls[2]), contains(classOpenCue));
+    expect(_body(poster.calls[2]), contains(recordNudge));
+    expect(coach.log.book.attempts.single.submission, 'apple');
+    expect(coach.log.book.attempts.single.submission.contains('模型改写'), isFalse);
+    final nextClass = poster.calls.last;
+    expect(_body(nextClass).contains('apple'), isFalse);
+    expect(_body(nextClass), contains(classOpenCue));
   });
 
   test('two hours later an open card is dropped and the old bubble stays home', () async {
@@ -131,6 +169,96 @@ void main() {
     expect(coach.log.classes.last.messages.single.content, '下一节的第一句');
     expect(_contents(poster.calls[1]), isNot(contains('hi')));
     expect(_contents(poster.calls[1]), contains(classOpenCue));
+  });
+
+  test('greeting renders Chinese coaching and leaves the open cue off screen', () async {
+    final poster = _ScriptPoster([
+      _chat(toolCalls: [_call('get_learner', '{}')]),
+      _chat(content: '你好。记录是空的，我们先练一句打招呼。'),
+    ]);
+    final coach = _coach(poster);
+
+    await coach.ensureGreeting();
+
+    final rendered = [
+      for (final message in coach.log.classes.single.messages) message.content,
+    ];
+    expect(rendered, ['你好。记录是空的，我们先练一句打招呼。']);
+    expect(rendered.join().contains(classOpenCue), isFalse);
+    expect(rendered.join().contains("I'll start by reading"), isFalse);
+    expect(rendered.join().contains('reading the student'), isFalse);
+    expect(rendered.join().contains('get_learner'), isFalse);
+    expect(coach.log.classes.single.userTurns, 0);
+    expect(_body(poster.calls.first), contains(classOpenCue));
+    expect(_contents(poster.calls.first).contains(classOpenCue), isTrue);
+    expect(
+      coach.log.classes.single.messages.any((message) => message.content == classOpenCue),
+      isFalse,
+    );
+  });
+
+  test('a legal opening card stops the turn and hides tool arguments', () async {
+    final cardArgs = jsonEncode({
+      'kind': 'choice',
+      'prompt': '选一句打招呼',
+      'options': [
+        {'id': 'a', 'text': 'Hello.'},
+        {'id': 'b', 'text': 'Goodbye.'},
+      ],
+    });
+    final poster = _ScriptPoster([
+      _chat(
+        content: '先选一句。',
+        toolCalls: [_call('present_card', cardArgs)],
+      ),
+      _chat(content: '不该再请求'),
+    ]);
+    final coach = _coach(poster);
+
+    await coach.ensureGreeting();
+
+    expect(poster.calls, hasLength(1));
+    expect(coach.pendingCard, isNotNull);
+    expect(coach.pendingCard!.options.map((option) => option.text), [
+      'Hello.',
+      'Goodbye.',
+    ]);
+    final bubble = coach.log.classes.single.messages.single.content;
+    expect(bubble, '先选一句。');
+    expect(bubble.contains(classOpenCue), isFalse);
+    expect(bubble.contains(cardArgs), isFalse);
+    expect(bubble.contains('"kind"'), isFalse);
+    expect(bubble.contains("I'll start by reading"), isFalse);
+  });
+
+  test('stop here closes the class and the next opening stays on screen', () async {
+    final poster = _ScriptPoster([
+      _chat(content: '第一节你好。我们先练一句。'),
+      _chat(content: '第二节你好。记录还是空的，我们继续练。'),
+    ]);
+    final coach = _coach(poster);
+
+    await coach.ensureGreeting();
+    expect(coach.log.classes.single.messages.single.content, '第一节你好。我们先练一句。');
+
+    await coach.stopHere();
+
+    expect(coach.log.classes, hasLength(2));
+    expect(coach.log.classes.first.isOpen, isFalse);
+    expect(coach.log.classes.last.isOpen, isTrue);
+    expect(
+      coach.log.classes.last.messages.single.content,
+      '第二节你好。记录还是空的，我们继续练。',
+    );
+    expect(
+      coach.log.classes.last.messages.single.content.contains(classOpenCue),
+      isFalse,
+    );
+    expect(
+      coach.log.classes.last.messages.single.content.contains("I'll start by reading"),
+      isFalse,
+    );
+    expect(coach.log.openClass, coach.log.classes.last);
   });
 }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:english_app/app/app_model.dart';
 import 'package:english_app/engine/api_requests.dart';
+import 'package:english_app/engine/chat_message.dart';
 import 'package:english_app/net/poster.dart';
 import 'package:english_app/ui/english_app.dart';
 import 'package:english_app/ui/practice_page.dart';
@@ -119,6 +120,44 @@ void main() {
     expect(store.checkedIn, isFalse);
   });
 
+  testWidgets('class page draws only the open class', (tester) async {
+    final store = fixtureStore(
+      clock: () => DateTime(2026, 10, 4, 12),
+      levelChosen: true,
+    );
+    final model = AppModel(
+      store: store,
+      poster: ThrowingPoster(),
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    final log = model.classCoach.log;
+    final now = DateTime.now();
+    final previous = log.ensureOpen(now);
+    previous.messages.add(
+      const ChatMessage(id: 'old', role: ChatRole.assistant, content: '旧课气泡'),
+    );
+    previous.lastMessageAt = now;
+    log.closeOpen(now);
+    final open = log.ensureOpen(now.add(const Duration(minutes: 1)));
+    open.messages.add(
+      const ChatMessage(
+        id: 'new',
+        role: ChatRole.assistant,
+        content: '你好。我们开始这一节。',
+      ),
+    );
+    open.lastMessageAt = now.add(const Duration(minutes: 1));
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pump();
+
+    expect(find.text('你好。我们开始这一节。'), findsOneWidget);
+    expect(find.text('旧课气泡'), findsNothing);
+    expect(find.text('下一节'), findsNothing);
+    expect(find.textContaining('新的一节开始'), findsNothing);
+  });
+
   testWidgets('opening class raises a choice card before confirm', (
     tester,
   ) async {
@@ -152,6 +191,7 @@ void main() {
     expect(find.text('I am a student.'), findsOneWidget);
     expect(find.text('I are student.'), findsOneWidget);
     expect(find.textContaining('"kind"'), findsNothing);
+    expect(find.text('先到这'), findsOneWidget);
     await tester.tap(find.text('I are student.'));
     await tester.pump();
     await tester.tap(find.text('I am a student.'));

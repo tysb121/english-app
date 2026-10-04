@@ -94,8 +94,9 @@ class ClassCoach {
     await _turn(includeCue: false);
   }
 
-  /// Drop an unanswered card and close this class. Nothing is graded.
-  void stopHere() {
+  /// Drop an unanswered card, close this class, and open the next one.
+  /// Nothing is graded. The next class speaks on this same page.
+  Future<void> stopHere() async {
     if (busy) return;
     pendingCard = null;
     pending = null;
@@ -104,6 +105,7 @@ class ClassCoach {
     _closeAfterAnswer = false;
     log.closeOpen(DateTime.now());
     model.noteStudyChanged();
+    await ensureGreeting();
   }
 
   Future<void> retry() async {

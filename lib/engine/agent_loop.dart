@@ -6,7 +6,12 @@ import 'agent_tools.dart';
 import 'api_requests.dart';
 import 'gradebook.dart';
 
-const classOpenCue = '新的一节开始，学生还没说话。先读记录，再对他说第一句。';
+const classOpenCue =
+    '新的一节开始，学生还没说话。用工具读记录，不要把这一步说出来。然后只用中文跟他说第一句。';
+
+/// 学生已经提交，但这一问还没有成功的 record_attempt。不画在屏幕上。
+const recordNudge =
+    '这次作答还没记下。不要再写给学生看的话。没有学习项就先 add_item，下一截用返回的 id 调用 record_attempt。';
 
 /// 短系统提示。previousCloseNote 非空时附在末尾，标题为「上一节」。
 String buildAgentSystem({String? previousCloseNote}) {
@@ -19,7 +24,11 @@ String buildAgentSystem({String? previousCloseNote}) {
     ..writeln('同一类错误反复出现，先复习，不往前赶。')
     ..writeln('连续轻松，就加难度，并推迟复习。')
     ..writeln('连续吃力，就把这一步改短，并提前复习。')
-    ..write('一次只推进一步。讲解用中文，英文句子用英文。');
+    ..write('一次只推进一步。对学生说的话只用中文。英文只写正在练的那一句。')
+    ..write('不要用英文开场。读记录、调用工具和思考不要说出来。')
+    ..write('调用工具的那一截不要同时写给学生看的正文。')
+    ..write('学生一提交句子或确认卡片，这一问先记下作答：没有学习项就先 add_item，下一截再用返回的 id 调用 record_attempt。')
+    ..write('这两步完成前不要出卡片，也不要先讲解。没记成功不要当成已经记下。');
   final note = previousCloseNote?.trim();
   if (note != null && note.isNotEmpty) {
     prompt
@@ -129,6 +138,15 @@ Future<AgentTurnUpdate> runAgentTurn({
 
     final toolCalls = assembleToolCalls(events);
     if (toolCalls.isEmpty) {
+      final waitingRecord = pending != null && !pending.consumed;
+      if (waitingRecord && slice < maxSlices - 1) {
+        thread.add({
+          'role': 'assistant',
+          'content': sliceText.toString(),
+        });
+        thread.add({'role': 'user', 'content': recordNudge});
+        continue;
+      }
       return publish(snapshot(done: true));
     }
 
@@ -209,6 +227,11 @@ Future<AgentTurnUpdate> runAgentTurn({
       return publish(snapshot(card: card, done: true));
     }
     if (endClass && visible.toString().trim().isNotEmpty) {
+      return publish(snapshot(done: true));
+    }
+    if (pending != null &&
+        pending.consumed &&
+        visible.toString().trim().isNotEmpty) {
       return publish(snapshot(done: true));
     }
     if (slice == maxSlices - 1) {

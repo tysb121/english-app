@@ -38,7 +38,7 @@ class _ClassPageState extends State<ClassPage> {
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final coach = model.classCoach;
-    final sitting = coach.log.currentSitting(DateTime.now());
+    final open = coach.log.openClass;
     final waiting = coach.pendingCard != null;
     return SoftScaffold(
       title: '上课',
@@ -57,14 +57,12 @@ class _ClassPageState extends State<ClassPage> {
                       style: TextStyle(color: muted),
                     ),
                   ),
-                for (var i = 0; i < sitting.length; i++) ...[
-                  if (i > 0) const _NextDivider(),
-                  for (final message in sitting[i].messages)
+                if (open != null)
+                  for (final message in open.messages)
                     _Bubble(
                       mine: message.role == ChatRole.user,
                       text: message.content,
                     ),
-                ],
                 if (coach.draft.trim().isNotEmpty)
                   _Bubble(mine: false, text: coach.draft),
                 if (coach.status != null)
@@ -93,6 +91,13 @@ class _ClassPageState extends State<ClassPage> {
               ],
             ),
           ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: coach.busy ? null : () => coach.stopHere(),
+              child: const Text('先到这'),
+            ),
+          ),
           if (waiting)
             AnswerCardSheet(
               card: coach.pendingCard!,
@@ -109,29 +114,7 @@ class _ClassPageState extends State<ClassPage> {
                 _input.clear();
                 coach.sendText(text);
               },
-              onStop: coach.stopHere,
             ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NextDivider extends StatelessWidget {
-  const _NextDivider();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Expanded(child: Divider()),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: 8),
-            child: Text('下一节', style: TextStyle(color: muted, fontSize: 12)),
-          ),
-          Expanded(child: Divider()),
         ],
       ),
     );
@@ -171,13 +154,11 @@ class _Composer extends StatelessWidget {
     required this.controller,
     required this.busy,
     required this.onSend,
-    required this.onStop,
   });
 
   final TextEditingController controller;
   final bool busy;
   final VoidCallback onSend;
-  final VoidCallback onStop;
 
   @override
   Widget build(BuildContext context) {
@@ -187,10 +168,6 @@ class _Composer extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton(onPressed: busy ? null : onStop, child: const Text('先到这')),
-            ),
             Row(
               children: [
                 Expanded(
