@@ -216,7 +216,7 @@ class _SettingsPageState extends State<SettingsPage> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('清除数据重来'),
-              subtitle: const Text('清空练习进度与聊天，保留密钥和水平设置'),
+              subtitle: const Text('清空练习进度与聊天，保留密钥、水平和目标'),
               trailing: const Icon(
                 Icons.delete_outline_rounded,
                 color: wrongRed,

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../data/cefr_core.dart';
+import '../reading/left_word.dart';
 import 'gradebook.dart';
 import 'lesson_store.dart';
 
@@ -65,6 +66,9 @@ typedef WordLookup = Future<List<CefrWord>> Function({
   required String band,
   required int limit,
 });
+
+/// Words the learner kept while reading. Read-only for the teacher.
+typedef LeftWordLookup = Future<List<LeftWord>> Function({int limit});
 
 class ToolOutcome {
   final String content;
@@ -234,6 +238,21 @@ const List<Map<String, Object?>> agentToolSchemas = [
   {
     'type': 'function',
     'function': {
+      'name': 'get_left_words',
+      'description':
+          '读取学生在读书时留下的词。只是事实，不写成绩，也不排进今天的课。',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'limit': {'type': 'integer', 'description': '返回条数，最多 20。'},
+        },
+        'additionalProperties': false,
+      },
+    },
+  },
+  {
+    'type': 'function',
+    'function': {
       'name': 'end_class',
       'description': '结束这一节。三行收课条由程序按成绩册生成，不采用模型改写后的成绩。',
       'parameters': {
@@ -320,6 +339,8 @@ ToolOutcome runTool({
       );
     case 'note_fact':
       return _noteFact(book, args);
+    case 'get_left_words':
+      return _fail('留下的词还没准备好');
     case 'end_class':
       return _endClass(book, args);
     case 'present_card':
@@ -344,9 +365,13 @@ Future<ToolOutcome> runToolCall({
   DateTime? now,
   LearnerSettings settings = const LearnerSettings(),
   WordLookup? lookupWords,
+  LeftWordLookup? leftWords,
 }) async {
   if (name == 'lookup_words') {
     return _lookupWords(args, settings: settings, lookupWords: lookupWords);
+  }
+  if (name == 'get_left_words') {
+    return _readLeftWords(args, leftWords);
   }
   return runTool(
     name: name,
@@ -436,6 +461,40 @@ Future<ToolOutcome> _lookupWords(
     });
   } on Object {
     return _fail('查词失败');
+  }
+}
+
+Future<ToolOutcome> _readLeftWords(
+  Map<String, Object?> args,
+  LeftWordLookup? leftWords,
+) async {
+  final lookup = leftWords;
+  if (lookup == null) return _ok({'words': <Object?>[]});
+  var limit = 20;
+  final rawLimit = args['limit'];
+  if (rawLimit is int) {
+    limit = rawLimit;
+  } else if (rawLimit is num) {
+    limit = rawLimit.toInt();
+  }
+  if (limit < 0) limit = 0;
+  if (limit > 20) limit = 20;
+  try {
+    final words = await lookup(limit: limit);
+    final capped = words.length > 20 ? words.sublist(0, 20) : words;
+    return _ok({
+      'words': [
+        for (final word in capped)
+          {
+            'word': word.word,
+            'sentence': word.sentence,
+            'gloss_cn': word.glossCn,
+            'at': word.at,
+          },
+      ],
+    });
+  } on Object {
+    return _fail('读留下的词失败');
   }
 }
 

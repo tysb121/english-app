@@ -61,33 +61,10 @@ class _ClassPageState extends State<ClassPage> {
         children: [
           Expanded(
             child: ListView(
+              reverse: true,
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
               children: [
-                if (!coach.hasKey)
-                  const Padding(
-                    padding: EdgeInsets.only(bottom: 12),
-                    child: Text(
-                      '填写密钥后才能上课。到「我的」粘贴 DeepSeek 密钥。',
-                      style: TextStyle(color: muted),
-                    ),
-                  ),
-                if (open != null)
-                  for (final message in open.messages)
-                    _Bubble(
-                      mine: message.role == ChatRole.user,
-                      text: message.content,
-                    ),
-                if (coach.draft.trim().isNotEmpty)
-                  _Bubble(mine: false, text: coach.draft),
-                if (coach.status != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      coach.status!,
-                      style: const TextStyle(color: muted, fontSize: 13),
-                    ),
-                  ),
                 if (coach.error != null)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -104,6 +81,30 @@ class _ClassPageState extends State<ClassPage> {
                           child: const Text('再发一次'),
                         ),
                       ],
+                    ),
+                  ),
+                if (coach.status != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      coach.status!,
+                      style: const TextStyle(color: muted, fontSize: 13),
+                    ),
+                  ),
+                if (coach.draft.trim().isNotEmpty)
+                  _Bubble(mine: false, text: coach.draft),
+                if (open != null)
+                  for (final message in open.messages.reversed)
+                    _Bubble(
+                      mine: message.role == ChatRole.user,
+                      text: message.content,
+                    ),
+                if (!coach.hasKey)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 12),
+                    child: Text(
+                      '填写密钥后才能上课。到「我的」粘贴 DeepSeek 密钥。',
+                      style: TextStyle(color: muted),
                     ),
                   ),
               ],
@@ -149,7 +150,8 @@ class _ClassPageState extends State<ClassPage> {
       }
       final position = _scroll.position;
       if (!position.hasContentDimensions) return;
-      final target = position.maxScrollExtent;
+      // reverse: true keeps the latest line at offset 0, just above the cards.
+      final target = position.minScrollExtent;
       if ((position.pixels - target).abs() < 1) return;
       position.jumpTo(target);
     });

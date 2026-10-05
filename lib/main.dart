@@ -10,6 +10,8 @@ import 'data/cefr_core.dart';
 import 'engine/lesson_store.dart';
 import 'engine/chat_thread.dart';
 import 'net/io_poster.dart';
+import 'reading/local_book_picker.dart';
+import 'reading/reader_library.dart';
 import 'ui/english_app.dart';
 
 Future<void> main() async {
@@ -96,6 +98,10 @@ Future<void> main() async {
   );
   model.lookupWords = coachDb.lookupWords;
   model.searchWords = coachDb.searchWordbook;
+  final reader = ReaderLibrary(coachDb);
+  model.reader = reader;
+  model.leftWords = reader.leftWords;
+  model.pickLocalBook = pickLocalBookFile;
   try {
     model.adoptStudyLog(await coachDb.loadStudyLog());
   } on Object {

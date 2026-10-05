@@ -13,11 +13,14 @@ import '../engine/chat_context.dart';
 import '../engine/chat_message.dart';
 import '../engine/class_session.dart';
 import '../engine/gradebook.dart';
+import '../reading/book_text.dart';
+import '../reading/left_word.dart';
+import '../reading/reader_book.dart';
 import 'local_progress.dart';
 import 'progress_shell.dart';
 
 const coachDbFileName = 'english_coach.db';
-const coachSchemaVersion = 3;
+const coachSchemaVersion = 4;
 
 const _learnerNameKey = 'learner_name';
 const _learnerJobKey = 'learner_job';
@@ -75,6 +78,16 @@ class CoachDatabase {
           if (oldVersion < 3) {
             await _createStudyTables(db);
           }
+          if (oldVersion < 4) {
+            await _createReaderTables(db);
+          }
+          // Schema 2 fixtures and any pre-meta file have no meta table.
+          // Fresh installs create it in onCreate; upgrades must too.
+          await _ensureMeta(db);
+          await db.insert('meta', {
+            'key': 'schema',
+            'value': '$newVersion',
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
         },
       ),
     );
@@ -164,6 +177,15 @@ CREATE TABLE chat_checkpoints (
     await db.insert('meta', {'key': 'schema', 'value': '$coachSchemaVersion'});
     await _ensureWordbookIndexes(db);
     await _createStudyTables(db);
+    await _createReaderTables(db);
+  }
+
+  static Future<void> _ensureMeta(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+)''');
   }
 
   static Future<void> _ensureWordbookIndexes(Database db) async {
@@ -220,6 +242,33 @@ CREATE TABLE IF NOT EXISTS study_class_messages (
 CREATE TABLE IF NOT EXISTS study_class_checkpoints (
   class_id TEXT PRIMARY KEY NOT NULL,
   payload TEXT NOT NULL
+)''');
+  }
+
+  static Future<void> _createReaderTables(Database db) async {
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS reader_books (
+  id TEXT PRIMARY KEY NOT NULL,
+  title TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  place INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+)''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS reader_glosses (
+  word TEXT NOT NULL,
+  sentence TEXT NOT NULL,
+  gloss_cn TEXT NOT NULL,
+  PRIMARY KEY (word, sentence)
+)''');
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS left_words (
+  id TEXT PRIMARY KEY NOT NULL,
+  word TEXT NOT NULL,
+  sentence TEXT NOT NULL,
+  gloss_cn TEXT NOT NULL,
+  created_at TEXT NOT NULL
 )''');
   }
 
@@ -1000,6 +1049,178 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
       if (parsed != null) classes.add(parsed);
     }
     return StudyLog(book: book, classes: classes);
+  }
+
+  Future<List<ReaderBookSummary>> listReaderBooks() async {
+    final rows = await db.query(
+      'reader_books',
+      columns: ['id', 'title', 'place'],
+      orderBy: 'updated_at DESC',
+    );
+    return [
+      for (final row in rows)
+        ReaderBookSummary(
+          id: row['id']! as String,
+          title: row['title']! as String,
+          place: (row['place'] as int?) ?? 0,
+        ),
+    ];
+  }
+
+  Future<ReaderBook?> readerBook(String id) async {
+    final rows = await db.query(
+      'reader_books',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    return ReaderBook(
+      id: row['id']! as String,
+      title: row['title']! as String,
+      text: row['text']! as String,
+      place: (row['place'] as int?) ?? 0,
+    );
+  }
+
+  Future<ReaderBook> insertReaderBook({
+    required String id,
+    required String title,
+    required String fileName,
+    required String text,
+  }) async {
+    final now = DateTime.now().toIso8601String();
+    await db.insert('reader_books', {
+      'id': id,
+      'title': title,
+      'file_name': fileName,
+      'text': text,
+      'place': 0,
+      'updated_at': now,
+    });
+    return ReaderBook(id: id, title: title, text: text, place: 0);
+  }
+
+  Future<void> touchReaderBook(String id) async {
+    await db.update(
+      'reader_books',
+      {'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> saveReaderPlace(String id, int place) async {
+    final rows = await db.query(
+      'reader_books',
+      columns: ['text'],
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+    if (rows.isEmpty) return;
+    final text = rows.first['text'] as String? ?? '';
+    await db.update(
+      'reader_books',
+      {
+        'place': clampPlace(place, text.length),
+        'updated_at': DateTime.now().toIso8601String(),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Exact lemma, any level. Writes nothing. A prefix is not a hit.
+  Future<CefrWord?> exactWord(String word) async {
+    final text = word.trim();
+    if (text.isEmpty) return null;
+    final rows = await db.rawQuery(
+      '''
+      SELECT id, en, cn, pos, level, book_id
+      FROM wordbook
+      WHERE lower(en) = lower(?)
+      ORDER BY length(en), id
+      LIMIT 1
+      ''',
+      [text],
+    );
+    if (rows.isEmpty) return null;
+    return _rowToWord(rows.first);
+  }
+
+  Future<String?> cachedGloss({
+    required String word,
+    required String sentence,
+  }) async {
+    final key = word.trim().toLowerCase();
+    final line = sentence.trim();
+    if (key.isEmpty || line.isEmpty) return null;
+    final rows = await db.query(
+      'reader_glosses',
+      columns: ['gloss_cn'],
+      where: 'word = ? AND sentence = ?',
+      whereArgs: [key, line],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final gloss = rows.first['gloss_cn'];
+    return gloss is String && gloss.trim().isNotEmpty ? gloss : null;
+  }
+
+  Future<void> saveGloss({
+    required String word,
+    required String sentence,
+    required String glossCn,
+  }) async {
+    final key = word.trim().toLowerCase();
+    final line = sentence.trim();
+    final gloss = glossCn.trim();
+    if (key.isEmpty || line.isEmpty || gloss.isEmpty) return;
+    await db.insert('reader_glosses', {
+      'word': key,
+      'sentence': line,
+      'gloss_cn': gloss,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// A fact from 「留下这个词」. Does not write a study item, grade, or due time.
+  Future<void> leaveWord({
+    required String word,
+    required String sentence,
+    required String glossCn,
+  }) async {
+    final kept = word.trim();
+    final line = sentence.trim();
+    final gloss = glossCn.trim();
+    if (kept.isEmpty || line.isEmpty || gloss.isEmpty) return;
+    await db.insert('left_words', {
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'word': kept,
+      'sentence': line,
+      'gloss_cn': gloss,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  Future<List<LeftWord>> leftWords({int limit = 20}) async {
+    final cap = limit < 0 ? 0 : (limit > 20 ? 20 : limit);
+    if (cap == 0) return const [];
+    final rows = await db.query(
+      'left_words',
+      orderBy: 'created_at DESC',
+      limit: cap,
+    );
+    return [
+      for (final row in rows)
+        LeftWord(
+          word: row['word']! as String,
+          sentence: row['sentence']! as String,
+          glossCn: row['gloss_cn']! as String,
+          at: row['created_at']! as String,
+        ),
+    ];
   }
 
   Future<void> close() => db.close();

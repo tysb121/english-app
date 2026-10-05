@@ -32,7 +32,8 @@ String buildAgentSystem({String? previousCloseNote}) {
     ..write('新词优先从学生当前水平里取。拿不准再查 lookup_words，不必每句都查。词库释义只作参考。')
     ..write('新词先单独认，再放进短句。句里出现还没练过的词，先把那个词拆出来。')
     ..write('点选只用来认。要标成「会用」，就让学生自己把句子写出来，而且当时答案没有显示。')
-    ..write('学生点「不会」时，原文是「这题我不会」，不是某个选项。用中文讲这一项，不要把这次当成选对，也不要据此标成「会用」。');
+    ..write('学生点「不会」时，原文是「这题我不会」，不是某个选项。用中文讲这一项，不要把这次当成选对，也不要据此标成「会用」。')
+    ..write('学生在读书时留下的词，用 get_left_words 读。那只是事实，不写成绩，也不排进今天的课。');
   final note = previousCloseNote?.trim();
   if (note != null && note.isNotEmpty) {
     prompt
@@ -78,6 +79,7 @@ Future<AgentTurnUpdate> runAgentTurn({
   String? classId,
   LearnerSettings settings = const LearnerSettings(),
   WordLookup? lookupWords,
+  LeftWordLookup? leftWords,
 }) async {
   final visible = StringBuffer();
   var endClass = false;
@@ -184,6 +186,7 @@ Future<AgentTurnUpdate> runAgentTurn({
         classId: classId,
         settings: settings,
         lookupWords: lookupWords,
+        leftWords: leftWords,
       );
     }
 

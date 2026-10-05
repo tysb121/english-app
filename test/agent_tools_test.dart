@@ -5,6 +5,7 @@ import 'package:english_app/app/coach_database.dart';
 import 'package:english_app/data/cefr_core.dart';
 import 'package:english_app/engine/agent_tools.dart';
 import 'package:english_app/engine/gradebook.dart';
+import 'package:english_app/reading/left_word.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -22,6 +23,7 @@ void main() {
         'set_plan',
         'record_attempt',
         'note_fact',
+        'get_left_words',
         'end_class',
         'present_card',
       ],
@@ -567,6 +569,64 @@ void main() {
     expect(book.attempts.last.optionId, isNull);
     expect(book.attempts.last.revealed, isTrue);
     expect(book.attempts.last.pass, isFalse);
+  });
+
+  test('get_left_words reads a kept word and note_fact still rejects other keys', () async {
+    final book = Gradebook(ids: _ids('item'));
+    final item = book.addItem(
+      promptCn: '已有的一句',
+      targetEn: 'already here',
+      difficulty: 1,
+    );
+    final rejected = runTool(
+      name: 'note_fact',
+      args: {'key': 'left_word', 'value': 'apple'},
+      book: book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(rejected.ok, isFalse);
+    expect(jsonDecode(rejected.content), {
+      'ok': false,
+      'error': '只能记下名字、工作或目标',
+    });
+    expect(book.facts.name, isEmpty);
+    expect(book.facts.job, isEmpty);
+    expect(book.facts.goal, isEmpty);
+    expect(book.items, hasLength(1));
+    expect(item.status, ItemStatus.unseen);
+    expect(item.dueAt, isNull);
+    expect(book.attempts, isEmpty);
+
+    final read = await runToolCall(
+      name: 'get_left_words',
+      args: {'limit': 20},
+      book: book,
+      pending: null,
+      cardPending: false,
+      leftWords: ({int limit = 20}) async => const [
+        LeftWord(
+          word: 'apple',
+          sentence: 'She saw an apple.',
+          glossCn: '苹果',
+          at: '2026-10-05T00:00:00.000',
+        ),
+      ],
+    );
+    expect(read.ok, isTrue);
+    final words = ((jsonDecode(read.content) as Map)['words'] as List)
+        .cast<Map>();
+    expect(words, hasLength(1));
+    expect(words.single['word'], 'apple');
+    expect(words.single['sentence'], 'She saw an apple.');
+    expect(words.single['gloss_cn'], '苹果');
+    expect(book.items, hasLength(1));
+    expect(item.status, ItemStatus.unseen);
+    expect(item.dueAt, isNull);
+    expect(book.attempts, isEmpty);
+    expect(book.facts.name, isEmpty);
+    expect(book.facts.job, isEmpty);
+    expect(book.facts.goal, isEmpty);
   });
 }
 

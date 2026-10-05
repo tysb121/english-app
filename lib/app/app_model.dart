@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../data/cefr_core.dart';
 import '../engine/agent_tools.dart';
+import '../reading/reader_library.dart';
 import '../engine/api_requests.dart';
 import '../engine/chat_thread.dart';
 import '../engine/class_session.dart';
@@ -45,6 +46,11 @@ class AppModel extends ChangeNotifier {
   /// Read-only wordbook search for the 词 tab. Not a teacher tool.
   Future<List<CefrWord>> Function({required String query, required int limit})?
   searchWords;
+
+  /// Local books opened from the 词 tab.
+  ReaderLibrary? reader;
+  LeftWordLookup? leftWords;
+  Future<PickedLocalBook?> Function()? pickLocalBook;
   late final ClassCoach classCoach;
 
   bool connectionOk = false;

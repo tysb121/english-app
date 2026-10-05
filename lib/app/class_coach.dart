@@ -193,6 +193,7 @@ class ClassCoach {
           goal: model.store.goal,
         ),
         lookupWords: model.lookupWords,
+        leftWords: model.leftWords,
         onUpdate: (next) {
           draft = next.visibleText;
           status = next.status;

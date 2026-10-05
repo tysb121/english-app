@@ -12,9 +12,13 @@ import 'package:english_app/engine/class_session.dart';
 import 'package:english_app/engine/gradebook.dart';
 import 'package:english_app/engine/pos_label.dart';
 import 'package:english_app/net/poster.dart';
+import 'package:english_app/reading/book_text.dart';
+import 'package:english_app/reading/reader_library.dart';
+import 'package:english_app/ui/reader_page.dart';
 import 'package:english_app/ui/english_app.dart';
 import 'package:english_app/ui/practice_page.dart';
 import 'package:english_app/ui/thinking_panel.dart';
+import 'package:archive/archive.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -109,6 +113,10 @@ void main() {
     expect(find.text('检查更新'), findsOneWidget);
     expect(find.text('导出日志'), findsOneWidget);
     expect(find.text('清除数据重来'), findsOneWidget);
+    expect(
+      find.text('清空练习进度与聊天，保留密钥、水平和目标'),
+      findsOneWidget,
+    );
     expect(find.text('思考强度'), findsNothing);
     expect(find.text('每天新词'), findsNothing);
     expect(find.textContaining('从明天'), findsNothing);
@@ -591,6 +599,317 @@ void main() {
     expect(find.textContaining('从明天开始练'), findsNothing);
   });
 
+  testWidgets('词页 opens a txt and an epub and restores the reading place', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final loaded = await tester.runAsync(() async {
+      ensureCoachDbFactory();
+      final tmp = await Directory.systemTemp.createTemp('reader_place_');
+      final coach = await CoachDatabase.open(path: p.join(tmp.path, 'read.db'));
+      return (tmp: tmp, coach: coach);
+    });
+    final tmp = loaded!.tmp;
+    final coach = loaded.coach;
+    addTearDown(() async {
+      await coach.close();
+      if (tmp.existsSync()) await tmp.delete(recursive: true);
+    });
+
+    final txt = _longBook(
+      'Openingmark The apple sat on the table.',
+      'Placemark zeta waited by the gate.',
+    );
+    final epub = _sampleEpub();
+    final picks = <PickedLocalBook>[
+      PickedLocalBook(name: 'notes.pdf', bytes: const [1, 2, 3]),
+      PickedLocalBook(name: 'walk.txt', bytes: utf8.encode(txt)),
+      PickedLocalBook(name: 'walk.epub', bytes: epub),
+    ];
+    final model = AppModel(
+      store: fixtureStore(
+        clock: () => DateTime(2026, 10, 5),
+        levelChosen: true,
+      ),
+      poster: RecordingPoster(),
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    _quietClass(model);
+    final reader = ReaderLibrary(coach);
+    model.reader = reader;
+    model.pickLocalBook = () async => picks.removeAt(0);
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pump();
+    await tester.tap(find.text('词'));
+    await tester.pumpAndSettle();
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.text('今日练习'), findsOneWidget);
+    expect(find.text('记录'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
+    expect(find.widgetWithText(NavigationDestination, '词'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('打开一本书'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    expect(find.text('只能打开 txt 或 epub'), findsOneWidget);
+    expect(find.text('PDF'), findsNothing);
+
+    await _openPickedBook(tester);
+    expect(find.text('Openingmark'), findsOneWidget, reason: _visible(tester));
+    expect(find.text('walk'), findsOneWidget);
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Placemark'),
+      500,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+    _expectOnScreen(tester, 'Placemark');
+    await _leaveReader(tester);
+    expect(find.text('接着读'), findsOneWidget, reason: _visible(tester));
+
+    final saved = await tester.runAsync(() => reader.listBooks());
+    final txtBook = saved!.single;
+    expect(txtBook.place, greaterThan(0));
+    final blocks = readerBlocks(txt.trim());
+    final opening = blocks.firstWhere(
+      (block) => block.pieces.any((piece) => piece.word == 'Openingmark'),
+    );
+    expect(txtBook.place, greaterThan(opening.start));
+
+    await _reopenBook(tester, 'walk');
+    _expectOnScreen(tester, 'Placemark');
+    _expectGone(tester, 'Openingmark');
+    await _leaveReader(tester);
+    await _reopenBook(tester, 'walk');
+    _expectOnScreen(tester, 'Placemark');
+    _expectGone(tester, 'Openingmark');
+    final again = await tester.runAsync(() => reader.book(txtBook.id));
+    expect(again!.place, txtBook.place);
+    await _leaveReader(tester);
+
+    await _openPickedBook(tester);
+    expect(find.text('Sample Walk'), findsOneWidget, reason: _visible(tester));
+    expect(find.text('Openingepub'), findsOneWidget, reason: _visible(tester));
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Placeepub'),
+      500,
+      scrollable: find.byType(Scrollable).last,
+    );
+    await tester.pump();
+    _expectOnScreen(tester, 'Placeepub');
+    await _leaveReader(tester);
+    await _reopenBook(tester, 'Sample Walk');
+    _expectOnScreen(tester, 'Placeepub');
+    _expectGone(tester, 'Openingepub');
+    await _leaveReader(tester);
+    await _reopenBook(tester, 'Sample Walk');
+    _expectOnScreen(tester, 'Placeepub');
+    _expectGone(tester, 'Openingepub');
+    await _leaveReader(tester);
+
+    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.text('今日练习'), findsOneWidget);
+    expect(find.widgetWithText(NavigationDestination, '词'), findsOneWidget);
+    expect(find.text('记录'), findsOneWidget);
+    expect(find.text('我的'), findsOneWidget);
+    expect(find.widgetWithText(NavigationDestination, '阅读'), findsNothing);
+  });
+
+  testWidgets('a tapped word uses the book, then one sentence gloss, or a key', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final loaded = await tester.runAsync(() async {
+      ensureCoachDbFactory();
+      final source = await loadCefrCore();
+      final apple = source.entries.firstWhere((entry) => entry.en == 'apple');
+      final tmp = await Directory.systemTemp.createTemp('reader_gloss_');
+      final coach = await CoachDatabase.open(
+        path: p.join(tmp.path, 'gloss.db'),
+        seedBook: source.entries,
+      );
+      return (apple: apple, tmp: tmp, coach: coach);
+    });
+    final apple = loaded!.apple;
+    final tmp = loaded.tmp;
+    final coach = loaded.coach;
+    addTearDown(() async {
+      await coach.close();
+      if (tmp.existsSync()) await tmp.delete(recursive: true);
+    });
+    expect(apple.cn.contains('苹果'), isTrue);
+
+    const passage =
+        'She saw an apple on the plate. CHAPTER-REST-MARKER stays in the other sentence.\n'
+        'A xqzephyr crossed the quiet quay.';
+    final poster = RecordingPoster();
+    final model = AppModel(
+      store: fixtureStore(
+        clock: () => DateTime(2026, 10, 5),
+        levelChosen: true,
+      ),
+      poster: poster,
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    _quietClass(model);
+    final kept = model.classCoach.log.book.addItem(
+      promptCn: '已有的一句',
+      targetEn: 'already here',
+      difficulty: 2,
+    );
+    final classCount = model.classCoach.log.classes.length;
+    final messageCount = model.classCoach.log.openClass!.messages.length;
+    final reader = ReaderLibrary(coach);
+    model.reader = reader;
+    model.pickLocalBook = () async => PickedLocalBook(
+      name: 'gloss.txt',
+      bytes: utf8.encode(passage),
+    );
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pump();
+    await tester.tap(find.text('词'));
+    await tester.pumpAndSettle();
+    await _openPickedBook(tester);
+
+    await _tapWord(tester, 'apple');
+    expect(find.text(apple.cn), findsWidgets);
+    expect(find.text('本机词书'), findsOneWidget);
+    expect(poster.calls, isEmpty);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('留下这个词'));
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    });
+    await tester.pump();
+    expect(find.text('已留下'), findsOneWidget);
+    expect(model.classCoach.log.book.items, hasLength(1));
+    expect(kept.status, ItemStatus.unseen);
+    expect(kept.dueAt, isNull);
+    expect(model.classCoach.log.book.attempts, isEmpty);
+    expect(model.classCoach.log.classes, hasLength(classCount));
+    expect(model.classCoach.log.openClass!.messages, hasLength(messageCount));
+    final studyRows = await tester.runAsync(
+      () => coach.db.rawQuery('SELECT COUNT(*) AS n FROM study_items'),
+    );
+    expect(studyRows!.single['n'], 0);
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+
+    poster.responses.add(Posted(200, _wrap('一阵怪风')));
+    await _tapWord(tester, 'xqzephyr');
+    expect(
+      find.text('一阵怪风'),
+      findsOneWidget,
+      reason:
+          'calls=${poster.calls.length} sheet=${find.byType(GlossSheet).evaluate().length} '
+          'looking=${find.textContaining('在看').evaluate().length} '
+          'miss=${find.textContaining('暂时没有').evaluate().length} '
+          '${poster.calls.isEmpty ? '' : jsonEncode(poster.calls.single.body)}',
+    );
+    expect(find.text('这一句'), findsOneWidget);
+    expect(poster.calls, hasLength(1));
+    final body = jsonEncode(poster.calls.single.body);
+    expect(body, contains('xqzephyr'));
+    expect(body, contains('A xqzephyr crossed the quiet quay.'));
+    expect(body.contains('CHAPTER-REST-MARKER'), isFalse);
+    expect(body.contains('She saw an apple'), isFalse);
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    await _tapWord(tester, 'xqzephyr');
+    expect(find.text('一阵怪风'), findsOneWidget);
+    expect(poster.calls, hasLength(1));
+
+    final read = await tester.runAsync(
+      () => runToolCall(
+        name: 'get_left_words',
+        args: {},
+        book: model.classCoach.log.book,
+        pending: null,
+        cardPending: false,
+        leftWords: reader.leftWords,
+      ),
+    );
+    final words = ((jsonDecode(read!.content) as Map)['words'] as List)
+        .cast<Map>();
+    expect(words.single['word'], 'apple');
+    expect(words.single['gloss_cn'], apple.cn);
+    expect(words.single['sentence'], contains('apple'));
+    expect(model.classCoach.log.book.items, hasLength(1));
+    expect(kept.status, ItemStatus.unseen);
+    expect(kept.dueAt, isNull);
+    expect(model.classCoach.log.book.attempts, isEmpty);
+
+    final rejected = runTool(
+      name: 'note_fact',
+      args: {'key': 'left_word', 'value': 'apple'},
+      book: model.classCoach.log.book,
+      pending: null,
+      cardPending: false,
+    );
+    expect(rejected.ok, isFalse);
+    expect(model.classCoach.log.book.facts.name, isEmpty);
+    expect(model.classCoach.log.book.facts.job, isEmpty);
+    expect(model.classCoach.log.book.facts.goal, isEmpty);
+    expect(model.classCoach.log.book.items, hasLength(1));
+  });
+
+  testWidgets('a missed word with no key asks for one and does not request', (
+    tester,
+  ) async {
+    final loaded = await tester.runAsync(() async {
+      ensureCoachDbFactory();
+      final tmp = await Directory.systemTemp.createTemp('reader_nokey_');
+      final coach = await CoachDatabase.open(path: p.join(tmp.path, 'nokey.db'));
+      return (tmp: tmp, coach: coach);
+    });
+    final tmp = loaded!.tmp;
+    final coach = loaded.coach;
+    addTearDown(() async {
+      await coach.close();
+      if (tmp.existsSync()) await tmp.delete(recursive: true);
+    });
+    final poster = RecordingPoster();
+    final model = AppModel(
+      store: fixtureStore(
+        clock: () => DateTime(2026, 10, 5),
+        levelChosen: true,
+      ),
+      poster: poster,
+      unlocked: true,
+    );
+    model.reader = ReaderLibrary(coach);
+    model.pickLocalBook = () async => PickedLocalBook(
+      name: 'miss.txt',
+      bytes: utf8.encode('A xqzephyr crossed the quiet quay.'),
+    );
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pump();
+    await tester.tap(find.text('词'));
+    await tester.pumpAndSettle();
+    await _openPickedBook(tester);
+    await _tapWord(tester, 'xqzephyr');
+    expect(find.textContaining('填写密钥后才能查这个词'), findsOneWidget);
+    expect(find.text('留下这个词'), findsNothing);
+    expect(poster.calls, isEmpty);
+  });
+
   testWidgets('记录 lists study items beside class transcripts without grading', (
     tester,
   ) async {
@@ -803,6 +1122,51 @@ void main() {
     expect(coach.pendingCard, isNull);
   });
 
+  testWidgets('a short class line sits just above the practice strip', (
+    tester,
+  ) async {
+    final view = tester.view;
+    view.physicalSize = const Size(800, 900);
+    view.devicePixelRatio = 1;
+    addTearDown(view.resetPhysicalSize);
+    addTearDown(view.resetDevicePixelRatio);
+
+    final model = AppModel(
+      store: fixtureStore(
+        clock: () => DateTime(2026, 10, 5),
+        levelChosen: true,
+      ),
+      poster: ThrowingPoster(),
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    final coach = model.classCoach;
+    final now = DateTime.now();
+    final open = coach.log.ensureOpen(now);
+    open.messages.add(
+      const ChatMessage(
+        id: 'short',
+        role: ChatRole.assistant,
+        content: '你好，短句。',
+      ),
+    );
+    open.lastMessageAt = now;
+    coach.log.book.addItem(
+      promptCn: '短句中文',
+      targetEn: 'ShortEnglish',
+      difficulty: 1,
+    );
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pump();
+    await tester.pump();
+
+    final bubble = tester.getRect(find.text('你好，短句。'));
+    final practice = tester.getRect(find.text('短句中文'));
+    expect(practice.top - bubble.bottom, lessThan(64));
+    expect(bubble.top, greaterThan(160));
+  });
+
   testWidgets('coach bubble renders markdown bold without raw markers', (
     tester,
   ) async {
@@ -878,6 +1242,142 @@ String _recordReply({
       },
     ],
   });
+}
+
+void _quietClass(AppModel model) {
+  final now = DateTime.now();
+  final open = model.classCoach.log.ensureOpen(now);
+  open.lastMessageAt = now;
+  open.messages.add(
+    const ChatMessage(
+      id: 'already-open',
+      role: ChatRole.assistant,
+      content: '这一节已经开始',
+    ),
+  );
+}
+
+String _longBook(String opening, String place) {
+  return [
+    opening,
+    for (var i = 1; i <= 80; i++) 'Filler line $i about the road and the gate.',
+    place,
+    'After the mark the lane was quiet.',
+  ].join('\n\n');
+}
+
+List<int> _sampleEpub() {
+  final chapter = StringBuffer()
+    ..writeln('<html xmlns="http://www.w3.org/1999/xhtml"><body>');
+  for (var i = 1; i <= 80; i++) {
+    chapter.writeln('<p>Filler epub line $i about the road.</p>');
+  }
+  chapter.writeln('<p>Placeepub zeta waited by the gate.</p>');
+  chapter.writeln('</body></html>');
+  final archive = Archive();
+  archive.addFile(ArchiveFile.string('mimetype', 'application/epub+zip'));
+  archive.addFile(
+    ArchiveFile.string(
+      'META-INF/container.xml',
+      '<?xml version="1.0"?>'
+      '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">'
+      '<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles>'
+      '</container>',
+    ),
+  );
+  archive.addFile(
+    ArchiveFile.string(
+      'OEBPS/content.opf',
+      '<?xml version="1.0"?>'
+      '<package xmlns="http://www.idpf.org/2007/opf" version="3.0">'
+      '<metadata xmlns:dc="http://purl.org/dc/elements/1.1/">'
+      '<dc:title>Sample Walk</dc:title>'
+      '</metadata>'
+      '<manifest>'
+      '<item id="c1" href="c1.xhtml" media-type="application/xhtml+xml"/>'
+      '<item id="c2" href="c2.xhtml" media-type="application/xhtml+xml"/>'
+      '</manifest>'
+      '<spine><itemref idref="c1"/><itemref idref="c2"/></spine>'
+      '</package>',
+    ),
+  );
+  archive.addFile(
+    ArchiveFile.string(
+      'OEBPS/c1.xhtml',
+      '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+      '<p>Openingepub The apple was red.</p>'
+      '</body></html>',
+    ),
+  );
+  archive.addFile(ArchiveFile.string('OEBPS/c2.xhtml', chapter.toString()));
+  return ZipEncoder().encode(archive);
+}
+
+Future<void> _openPickedBook(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await tester.tap(find.text('打开一本书'));
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  });
+  await tester.pump();
+  await tester.pump();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  });
+  await tester.pump();
+  await tester.pump();
+}
+
+Future<void> _reopenBook(WidgetTester tester, String title) async {
+  await tester.tap(find.text(title));
+  await tester.pump();
+  await tester.pump();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  });
+  await tester.pump();
+  await tester.pump();
+}
+
+Future<void> _leaveReader(WidgetTester tester) async {
+  await tester.runAsync(() async {
+    await tester.tap(find.byTooltip('返回'));
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  });
+  await tester.pump();
+  await tester.pumpAndSettle();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+  });
+  await tester.pump();
+}
+
+Future<void> _tapWord(WidgetTester tester, String word) async {
+  await tester.tap(find.text(word));
+  await tester.pump();
+  await tester.pump();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  });
+  await tester.pump();
+  await tester.runAsync(() async {
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+  });
+  await tester.pumpAndSettle();
+}
+
+String _visible(WidgetTester tester) {
+  return find.byType(Text).evaluate().map((element) {
+    final widget = element.widget;
+    if (widget is! Text) return '';
+    return widget.data ?? widget.textSpan?.toPlainText() ?? '';
+  }).where((text) => text.isNotEmpty).take(30).join(' | ');
+}
+
+void _expectGone(WidgetTester tester, String text) {
+  final finder = find.text(text);
+  if (finder.evaluate().isEmpty) return;
+  final rect = tester.getRect(finder);
+  expect(rect.bottom, lessThanOrEqualTo(0), reason: text);
 }
 
 class HeldPoster implements Poster {
