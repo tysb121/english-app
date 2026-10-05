@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import '../data/cefr_core.dart';
 import 'gradebook.dart';
+import 'lesson_store.dart';
 
 class CardOption {
   final String id;
@@ -27,13 +29,42 @@ class AnswerCard {
   });
 }
 
+/// What the student submits by tapping 「不会」. Not an option on the card.
+const cardUnknownText = '这题我不会';
+
 class PendingSubmission {
-  PendingSubmission({required this.text, this.optionId});
+  PendingSubmission({
+    required this.text,
+    this.optionId,
+    this.answerHidden = false,
+    this.answerShown = false,
+  });
 
   final String text;
   final String? optionId;
+
+  /// The English being practiced was hidden when the student submitted.
+  final bool answerHidden;
+
+  /// The student tapped 「不会」, so this attempt cannot count as unseen.
+  final bool answerShown;
   bool consumed = false;
 }
+
+/// Product level and the goal chosen on the settings screen.
+class LearnerSettings {
+  const LearnerSettings({this.level = '入门', this.goal = '职场'});
+
+  final String level;
+  final String goal;
+}
+
+/// Capped read of the on-device wordbook. The teacher loop does not write.
+typedef WordLookup = Future<List<CefrWord>> Function({
+  required String query,
+  required String band,
+  required int limit,
+});
 
 class ToolOutcome {
   final String content;
@@ -54,10 +85,31 @@ const List<Map<String, Object?>> agentToolSchemas = [
     'type': 'function',
     'function': {
       'name': 'get_learner',
-      'description': '读取学生的名字、工作、目标和当前正在练的句子。',
+      'description': '读取学生的名字、工作、自由目标、当前句子，以及「我的」里已选的水平和目标。',
       'parameters': {
         'type': 'object',
         'properties': <String, Object?>{},
+        'additionalProperties': false,
+      },
+    },
+  },
+  {
+    'type': 'function',
+    'function': {
+      'name': 'lookup_words',
+      'description':
+          '在词库里查几条词作参考。默认只查学生当前水平。不写成绩，也不限制能教的句子。释义可能不准。',
+      'parameters': {
+        'type': 'object',
+        'properties': {
+          'query': {'type': 'string', 'description': '要查的英文或中文。'},
+          'band': {
+            'type': 'string',
+            'description': 'a1、a2、b1，或入门、基础、进阶。不传则用学生当前水平。',
+          },
+          'limit': {'type': 'integer', 'description': '最多 8 条。'},
+        },
+        'required': ['query'],
         'additionalProperties': false,
       },
     },
@@ -241,10 +293,13 @@ ToolOutcome runTool({
   required bool cardPending,
   String? classId,
   DateTime? now,
+  LearnerSettings settings = const LearnerSettings(),
 }) {
   switch (name) {
     case 'get_learner':
-      return _getLearner(book);
+      return _getLearner(book, settings);
+    case 'lookup_words':
+      return _fail('查词需要词库');
     case 'get_due_items':
       return _getDueItems(book, now ?? book.clock());
     case 'get_recent_attempts':
@@ -278,6 +333,33 @@ ToolOutcome runTool({
   }
 }
 
+/// Same entry as [runTool], and the only path that can read the wordbook.
+Future<ToolOutcome> runToolCall({
+  required String name,
+  required Map<String, Object?> args,
+  required Gradebook book,
+  required PendingSubmission? pending,
+  required bool cardPending,
+  String? classId,
+  DateTime? now,
+  LearnerSettings settings = const LearnerSettings(),
+  WordLookup? lookupWords,
+}) async {
+  if (name == 'lookup_words') {
+    return _lookupWords(args, settings: settings, lookupWords: lookupWords);
+  }
+  return runTool(
+    name: name,
+    args: args,
+    book: book,
+    pending: pending,
+    cardPending: cardPending,
+    classId: classId,
+    now: now,
+    settings: settings,
+  );
+}
+
 ToolOutcome _fail(String error) {
   return ToolOutcome(
     content: jsonEncode({'ok': false, 'error': error}),
@@ -298,15 +380,72 @@ ToolOutcome _ok(
   );
 }
 
-ToolOutcome _getLearner(Gradebook book) {
+ToolOutcome _getLearner(Gradebook book, LearnerSettings settings) {
   final currentId = book.facts.currentItemId;
   final current = currentId == null ? null : book.findItem(currentId);
+  final level = normalizeLevel(settings.level);
+  const goals = {'职场', '日常', '考试', '都要'};
+  final settingsGoal = goals.contains(settings.goal) ? settings.goal : '职场';
   return _ok({
     'name': book.facts.name,
     'job': book.facts.job,
     'goal': book.facts.goal,
+    'level': level,
+    'settings_goal': settingsGoal,
+    'band': cefrCodeForLevel(level),
     'current_item': current == null ? null : _itemJson(current),
   });
+}
+
+Future<ToolOutcome> _lookupWords(
+  Map<String, Object?> args, {
+  required LearnerSettings settings,
+  required WordLookup? lookupWords,
+}) async {
+  final lookup = lookupWords;
+  if (lookup == null) return _fail('词库还没准备好');
+  final query = args['query'];
+  if (query is! String) return _fail('缺少要查的词');
+  final text = query.trim();
+  if (text.isEmpty) return _ok({'words': <Object?>[]});
+  final band = _lookupBand(args['band'], settings);
+  var limit = cefrLookupCap;
+  final rawLimit = args['limit'];
+  if (rawLimit is int) {
+    limit = rawLimit;
+  } else if (rawLimit is num) {
+    limit = rawLimit.toInt();
+  }
+  if (limit < 1) limit = 1;
+  if (limit > cefrLookupCap) limit = cefrLookupCap;
+  try {
+    final words = await lookup(query: text, band: band, limit: limit);
+    final capped = words.length > cefrLookupCap
+        ? words.sublist(0, cefrLookupCap)
+        : words;
+    return _ok({
+      'words': [
+        for (final word in capped)
+          {
+            'en': word.en,
+            'cn': word.cn,
+            'pos': word.pos,
+            'level': word.level,
+          },
+      ],
+    });
+  } on Object {
+    return _fail('查词失败');
+  }
+}
+
+String _lookupBand(Object? raw, LearnerSettings settings) {
+  if (raw is! String || raw.trim().isEmpty) {
+    return cefrCodeForLevel(settings.level);
+  }
+  final text = raw.trim().toLowerCase();
+  if (text == 'a1' || text == 'a2' || text == 'b1') return text;
+  return cefrCodeForLevel(raw.trim());
 }
 
 ToolOutcome _getDueItems(Gradebook book, DateTime at) {
@@ -404,8 +543,17 @@ ToolOutcome _recordAttempt({
   if (itemId == null) return _fail('缺少题目');
   final pass = args['pass'];
   if (pass is! bool) return _fail('缺少对错');
-  final revealed = args['revealed'];
-  if (revealed is! bool) return _fail('缺少答案是否可见');
+  final revealedArg = args['revealed'];
+  if (revealedArg is! bool) return _fail('缺少答案是否可见');
+  // 「不会」算答案已经显示。遮住英文后再交，答案算没显示。其余沿用模型给出的 revealed。
+  final bool revealed;
+  if (pending.answerShown) {
+    revealed = true;
+  } else if (pending.answerHidden) {
+    revealed = false;
+  } else {
+    revealed = revealedArg;
+  }
   final corrected = args['corrected_en'];
   if (corrected is! String) return _fail('缺少改对的英文');
   var errorTag = '';

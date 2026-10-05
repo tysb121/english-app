@@ -1,5 +1,6 @@
 import '../engine/agent_loop.dart';
 import '../engine/agent_tools.dart';
+import '../engine/gradebook.dart';
 import '../engine/api_requests.dart';
 import '../engine/chat_context.dart';
 import '../engine/chat_message.dart';
@@ -19,6 +20,8 @@ class ClassCoach {
   String? status;
   String? error;
   bool busy = false;
+  bool hidePrompt = false;
+  bool hideAnswer = false;
   int _seq = 0;
 
   /// end_class arrived with a card. Close after the student confirms and the
@@ -32,7 +35,27 @@ class ClassCoach {
     pendingCard = null;
     pending = null;
     draft = '';
+    hidePrompt = false;
+    hideAnswer = false;
     _closeAfterAnswer = false;
+  }
+
+  StudyItem? get practiced {
+    final id = log.book.facts.currentItemId;
+    if (id == null) return null;
+    return log.book.findItem(id);
+  }
+
+  void toggleHidePrompt() {
+    if (busy) return;
+    hidePrompt = !hidePrompt;
+    model.tick();
+  }
+
+  void toggleHideAnswer() {
+    if (busy) return;
+    hideAnswer = !hideAnswer;
+    model.tick();
   }
 
   void clearLearning() {
@@ -72,7 +95,7 @@ class ClassCoach {
     );
     open.userTurns += 1;
     open.lastMessageAt = now;
-    pending = PendingSubmission(text: trimmed);
+    pending = PendingSubmission(text: trimmed, answerHidden: hideAnswer);
     model.noteStudyChanged();
     await _turn(includeCue: open.messages.length == 1);
   }
@@ -88,7 +111,31 @@ class ClassCoach {
     open.messages.add(ChatMessage(id: _id(), role: ChatRole.user, content: shown));
     open.userTurns += 1;
     open.lastMessageAt = now;
-    pending = PendingSubmission(text: shown, optionId: optionId);
+    pending = PendingSubmission(
+      text: shown,
+      optionId: optionId,
+      answerHidden: hideAnswer,
+    );
+    pendingCard = null;
+    model.noteStudyChanged();
+    await _turn(includeCue: false);
+  }
+
+  /// The student does not know which option to pick. This is not an option.
+  Future<void> unknownCard() async {
+    if (pendingCard == null || busy) return;
+    final open = log.openClass;
+    if (open == null) return;
+    final now = DateTime.now();
+    open.messages.add(
+      ChatMessage(id: _id(), role: ChatRole.user, content: cardUnknownText),
+    );
+    open.userTurns += 1;
+    open.lastMessageAt = now;
+    pending = PendingSubmission(
+      text: cardUnknownText,
+      answerShown: true,
+    );
     pendingCard = null;
     model.noteStudyChanged();
     await _turn(includeCue: false);
@@ -141,6 +188,11 @@ class ClassCoach {
         model: model.deepSeekModel,
         installId: model.store.installId,
         classId: open.id,
+        settings: LearnerSettings(
+          level: model.store.level,
+          goal: model.store.goal,
+        ),
+        lookupWords: model.lookupWords,
         onUpdate: (next) {
           draft = next.visibleText;
           status = next.status;

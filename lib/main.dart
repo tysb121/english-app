@@ -94,6 +94,7 @@ Future<void> main() async {
     persistSecrets: SecureSecrets().save,
     persistStudy: schedulePersist,
   );
+  model.lookupWords = coachDb.lookupWords;
   try {
     model.adoptStudyLog(await coachDb.loadStudyLog());
   } on Object {

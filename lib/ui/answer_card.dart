@@ -9,10 +9,12 @@ class AnswerCardSheet extends StatefulWidget {
     super.key,
     required this.card,
     required this.onConfirm,
+    required this.onUnknown,
   });
 
   final AnswerCard card;
   final void Function(String? optionId, String text) onConfirm;
+  final VoidCallback onUnknown;
 
   @override
   State<AnswerCardSheet> createState() => _AnswerCardSheetState();
@@ -73,12 +75,24 @@ class _AnswerCardSheetState extends State<AnswerCardSheet> {
                 ),
               ),
           const SizedBox(height: 8),
-          FilledButton(
-            key: const Key('answer-confirm'),
-            onPressed: canConfirm
-                ? () => widget.onConfirm(_optionId, _blank.text)
-                : null,
-            child: const Text('确认'),
+          Row(
+            children: [
+              TextButton(
+                key: const Key('answer-unknown'),
+                onPressed: widget.onUnknown,
+                child: const Text('不会'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: FilledButton(
+                  key: const Key('answer-confirm'),
+                  onPressed: canConfirm
+                      ? () => widget.onConfirm(_optionId, _blank.text)
+                      : null,
+                  child: const Text('确认'),
+                ),
+              ),
+            ],
           ),
         ],
       ),

@@ -1,15 +1,20 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:english_app/app/coach_database.dart';
+import 'package:english_app/data/cefr_core.dart';
 import 'package:english_app/engine/agent_tools.dart';
 import 'package:english_app/engine/gradebook.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
-  test('agentToolSchemas lists the ten teacher tools', () {
+  test('agentToolSchemas lists the teacher tools', () {
     expect(
       [for (final tool in agentToolSchemas) (tool['function'] as Map)['name']],
       [
         'get_learner',
+        'lookup_words',
         'get_due_items',
         'get_recent_attempts',
         'get_error_patterns',
@@ -322,6 +327,246 @@ void main() {
     expect(unknown.ok, isFalse);
     expect(unknown.card, isNull);
     expect(jsonDecode(unknown.content), {'ok': false, 'error': '未知工具'});
+  });
+
+  test('learner read returns the chosen level, settings goal, and free-text goal', () {
+    final book = Gradebook();
+    book.noteFact('name', '周');
+    book.noteFact('job', '老师');
+    book.noteFact('goal', '能开会');
+    final body = jsonDecode(
+      runTool(
+        name: 'get_learner',
+        args: {},
+        book: book,
+        pending: null,
+        cardPending: false,
+        settings: const LearnerSettings(level: '基础', goal: '考试'),
+      ).content,
+    ) as Map;
+    expect(body['name'], '周');
+    expect(body['job'], '老师');
+    expect(body['goal'], '能开会');
+    expect(body['level'], '基础');
+    expect(body['settings_goal'], '考试');
+    expect(body['band'], 'a2');
+  });
+
+  test('lookup reads the on-device wordbook and still allows an outside sentence', () async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    ensureCoachDbFactory();
+    final source = await loadCefrCore();
+    final tmp = await Directory.systemTemp.createTemp('lookup_words_');
+    CoachDatabase? db;
+    try {
+      db = await CoachDatabase.open(
+        path: p.join(tmp.path, 'words.db'),
+        seedBook: source.entries,
+      );
+      final book = Gradebook(ids: _ids('item'));
+      const settings = LearnerSettings(level: '入门', goal: '日常');
+
+      final known = source.entries.firstWhere(
+        (word) => word.en == 'good' && word.pos == 'adjective' && word.level == 'a1',
+      );
+      final found = await runToolCall(
+        name: 'lookup_words',
+        args: {'query': known.en, 'limit': 100},
+        book: book,
+        pending: null,
+        cardPending: false,
+        settings: settings,
+        lookupWords: db.lookupWords,
+      );
+      expect(found.ok, isTrue);
+      final words = (jsonDecode(found.content) as Map)['words'] as List;
+      expect(words, isNotEmpty);
+      expect(words.length, lessThanOrEqualTo(cefrLookupCap));
+      final row = words.cast<Map>().firstWhere(
+        (word) => word['en'] == known.en && word['pos'] == known.pos,
+      );
+      expect(row['cn'], known.cn);
+      expect(row['level'], known.level);
+      expect(book.items, isEmpty);
+      expect(book.attempts, isEmpty);
+
+      final higher = source.entries.firstWhere(
+        (word) =>
+            word.level == 'b1' &&
+            source.byLevel('a1').every((other) => other.en != word.en),
+      );
+      final stayed = await runToolCall(
+        name: 'lookup_words',
+        args: {'query': higher.en},
+        book: book,
+        pending: null,
+        cardPending: false,
+        settings: settings,
+        lookupWords: db.lookupWords,
+      );
+      final stayedWords = (jsonDecode(stayed.content) as Map)['words'] as List;
+      expect(
+        stayedWords.cast<Map>().where((word) => word['en'] == higher.en),
+        isEmpty,
+      );
+
+      final raised = await runToolCall(
+        name: 'lookup_words',
+        args: {'query': higher.en, 'band': 'b1'},
+        book: book,
+        pending: null,
+        cardPending: false,
+        settings: settings,
+        lookupWords: db.lookupWords,
+      );
+      final raisedRow = ((jsonDecode(raised.content) as Map)['words'] as List)
+          .cast<Map>()
+          .firstWhere((word) => word['en'] == higher.en && word['pos'] == higher.pos);
+      expect(raisedRow['cn'], higher.cn);
+      expect(raisedRow['level'], 'b1');
+
+      final missing = await runToolCall(
+        name: 'lookup_words',
+        args: {'query': 'zzzznotaword'},
+        book: book,
+        pending: null,
+        cardPending: false,
+        settings: settings,
+        lookupWords: db.lookupWords,
+      );
+      expect((jsonDecode(missing.content) as Map)['words'], isEmpty);
+
+      final gloss = source.entries.firstWhere(
+        (word) => word.en == 'a' && word.pos == 'determiner' && word.level == 'a1',
+      );
+      final glossed = await runToolCall(
+        name: 'lookup_words',
+        args: {'query': gloss.en, 'band': 'a1'},
+        book: book,
+        pending: null,
+        cardPending: false,
+        settings: settings,
+        lookupWords: db.lookupWords,
+      );
+      final glossRow = ((jsonDecode(glossed.content) as Map)['words'] as List)
+          .cast<Map>()
+          .firstWhere((word) => word['en'] == gloss.en && word['pos'] == gloss.pos);
+      expect(glossRow['cn'], gloss.cn);
+
+      final added = runTool(
+        name: 'add_item',
+        args: {
+          'prompt_cn': '请安排这次季度协同。',
+          'target_en': 'Please schedule the quarterly synergy review.',
+          'difficulty': 4,
+        },
+        book: book,
+        pending: null,
+        cardPending: false,
+      );
+      expect(added.ok, isTrue);
+      expect(book.attempts, isEmpty);
+      expect(book.items.single.targetEn, 'Please schedule the quarterly synergy review.');
+    } finally {
+      await db?.close();
+      if (tmp.existsSync()) await tmp.delete(recursive: true);
+    }
+  });
+
+  test('a hidden answer is stored unrevealed and a visible one is not forced', () {
+    final book = Gradebook(ids: _ids('item'));
+    final item = book.addItem(
+      promptCn: '我六点起床。',
+      targetEn: 'I get up at six.',
+      difficulty: 1,
+    );
+    final hidden = PendingSubmission(
+      text: 'I get up at six.',
+      answerHidden: true,
+    );
+    final recorded = runTool(
+      name: 'record_attempt',
+      args: {
+        'item_id': item.id,
+        'submission': '模型改写的原文',
+        'pass': true,
+        'corrected_en': 'I get up at six.',
+        'revealed': true,
+      },
+      book: book,
+      pending: hidden,
+      cardPending: false,
+    );
+    expect(recorded.ok, isTrue);
+    expect(book.attempts.single.submission, 'I get up at six.');
+    expect(book.attempts.single.submission.contains('模型改写的原文'), isFalse);
+    expect(book.attempts.single.revealed, isFalse);
+    expect(book.attempts.single.pass, isTrue);
+
+    final visible = PendingSubmission(
+      text: 'I get up at seven.',
+      answerHidden: false,
+    );
+    final again = runTool(
+      name: 'record_attempt',
+      args: {
+        'item_id': item.id,
+        'submission': '又改写',
+        'pass': false,
+        'error_tag': '其它',
+        'corrected_en': 'I get up at six.',
+        'revealed': true,
+      },
+      book: book,
+      pending: visible,
+      cardPending: false,
+    );
+    expect(again.ok, isTrue);
+    expect(book.attempts.last.submission, 'I get up at seven.');
+    expect(book.attempts.last.revealed, isTrue);
+    expect(book.attempts.last.pass, isFalse);
+
+    final before = book.attempts.length;
+    final broken = runTool(
+      name: 'record_attempt',
+      args: {
+        'item_id': item.id,
+        'submission': '不该写进来',
+        'corrected_en': 'I get up at six.',
+        'revealed': false,
+      },
+      book: book,
+      pending: PendingSubmission(text: '半截', answerHidden: true),
+      cardPending: false,
+    );
+    expect(broken.ok, isFalse);
+    expect(book.attempts, hasLength(before));
+
+    final unknown = PendingSubmission(
+      text: cardUnknownText,
+      answerHidden: true,
+      answerShown: true,
+    );
+    final shown = runTool(
+      name: 'record_attempt',
+      args: {
+        'item_id': item.id,
+        'submission': 'morning',
+        'option_id': 'b',
+        'pass': false,
+        'error_tag': '用错词',
+        'corrected_en': 'meeting',
+        'revealed': false,
+      },
+      book: book,
+      pending: unknown,
+      cardPending: false,
+    );
+    expect(shown.ok, isTrue);
+    expect(book.attempts.last.submission, cardUnknownText);
+    expect(book.attempts.last.optionId, isNull);
+    expect(book.attempts.last.revealed, isTrue);
+    expect(book.attempts.last.pass, isFalse);
   });
 }
 

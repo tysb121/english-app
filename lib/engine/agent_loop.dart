@@ -28,7 +28,11 @@ String buildAgentSystem({String? previousCloseNote}) {
     ..write('不要用英文开场。读记录、调用工具和思考不要说出来。')
     ..write('调用工具的那一截不要同时写给学生看的正文。')
     ..write('学生一提交句子或确认卡片，这一问先记下作答：没有学习项就先 add_item，下一截再用返回的 id 调用 record_attempt。')
-    ..write('这两步完成前不要出卡片，也不要先讲解。没记成功不要当成已经记下。');
+    ..write('这两步完成前不要出卡片，也不要先讲解。没记成功不要当成已经记下。')
+    ..write('新词优先从学生当前水平里取。拿不准再查 lookup_words，不必每句都查。词库释义只作参考。')
+    ..write('新词先单独认，再放进短句。句里出现还没练过的词，先把那个词拆出来。')
+    ..write('点选只用来认。要标成「会用」，就让学生自己把句子写出来，而且当时答案没有显示。')
+    ..write('学生点「不会」时，原文是「这题我不会」，不是某个选项。用中文讲这一项，不要把这次当成选对，也不要据此标成「会用」。');
   final note = previousCloseNote?.trim();
   if (note != null && note.isNotEmpty) {
     prompt
@@ -72,6 +76,8 @@ Future<AgentTurnUpdate> runAgentTurn({
   void Function(AgentTurnUpdate update)? onUpdate,
   int maxSlices = 4,
   String? classId,
+  LearnerSettings settings = const LearnerSettings(),
+  WordLookup? lookupWords,
 }) async {
   final visible = StringBuffer();
   var endClass = false;
@@ -158,34 +164,38 @@ Future<AgentTurnUpdate> runAgentTurn({
     // Queries and writes run before the card. end_class still runs, but a
     // valid card in this slice keeps the class open until the student answers.
     final outcomes = List<ToolOutcome?>.filled(toolCalls.length, null);
-    ToolOutcome execute(int index, {required bool cardAlready}) {
+    Future<ToolOutcome> execute(int index, {required bool cardAlready}) {
       final toolCall = toolCalls[index];
       final args = _objectArgs(toolCall.arguments);
       if (args == null) {
-        return const ToolOutcome(
-          content: '{"ok":false,"error":"参数不是 JSON"}',
-          ok: false,
+        return Future.value(
+          const ToolOutcome(
+            content: '{"ok":false,"error":"参数不是 JSON"}',
+            ok: false,
+          ),
         );
       }
-      return runTool(
+      return runToolCall(
         name: toolCall.name,
         args: args,
         book: book,
         pending: pending,
         cardPending: cardAlready,
         classId: classId,
+        settings: settings,
+        lookupWords: lookupWords,
       );
     }
 
     for (var i = 0; i < toolCalls.length; i++) {
       final name = toolCalls[i].name;
       if (name == 'present_card' || name == 'end_class') continue;
-      outcomes[i] = execute(i, cardAlready: cardPending);
+      outcomes[i] = await execute(i, cardAlready: cardPending);
     }
     var raised = cardPending;
     for (var i = 0; i < toolCalls.length; i++) {
       if (toolCalls[i].name != 'present_card') continue;
-      final outcome = execute(i, cardAlready: raised);
+      final outcome = await execute(i, cardAlready: raised);
       outcomes[i] = outcome;
       if (outcome.card != null) {
         card = outcome.card;
@@ -194,7 +204,7 @@ Future<AgentTurnUpdate> runAgentTurn({
     }
     for (var i = 0; i < toolCalls.length; i++) {
       if (toolCalls[i].name != 'end_class') continue;
-      final outcome = execute(i, cardAlready: raised);
+      final outcome = await execute(i, cardAlready: raised);
       outcomes[i] = outcome;
       if (outcome.endClass) endClass = true;
     }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../engine/agent_tools.dart';
 import '../engine/api_requests.dart';
 import '../engine/chat_thread.dart';
 import '../engine/class_session.dart';
@@ -38,6 +39,7 @@ class AppModel extends ChangeNotifier {
   final void Function(String json)? persistProgress;
   final void Function(SavedSecrets secrets)? persistSecrets;
   final void Function()? persistStudy;
+  WordLookup? lookupWords;
   late final ClassCoach classCoach;
 
   bool connectionOk = false;
@@ -87,6 +89,9 @@ class AppModel extends ChangeNotifier {
     await store.ensureTodayPlanAsync();
     commit();
     noteStudyChanged();
+    if (hasDeepSeekKey) {
+      await classCoach.ensureGreeting();
+    }
   }
 
   void unlock() {

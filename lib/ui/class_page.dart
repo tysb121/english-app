@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../app/class_coach.dart';
 import '../engine/chat_message.dart';
+import '../engine/gradebook.dart';
 import 'answer_card.dart';
 import 'english_app.dart';
 import 'theme.dart';
@@ -91,6 +93,8 @@ class _ClassPageState extends State<ClassPage> {
               ],
             ),
           ),
+          if (coach.practiced != null)
+            _PracticeStrip(item: coach.practiced!, coach: coach),
           Align(
             alignment: Alignment.centerLeft,
             child: TextButton(
@@ -104,6 +108,7 @@ class _ClassPageState extends State<ClassPage> {
               onConfirm: (optionId, text) {
                 coach.confirmCard(optionId: optionId, text: text);
               },
+              onUnknown: coach.unknownCard,
             )
           else
             _Composer(
@@ -117,6 +122,57 @@ class _ClassPageState extends State<ClassPage> {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _PracticeStrip extends StatelessWidget {
+  const _PracticeStrip({required this.item, required this.coach});
+
+  final StudyItem item;
+  final ClassCoach coach;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+      child: Column(
+        children: [
+          _hideRow(
+            shown: coach.hidePrompt ? '中文已遮住' : item.promptCn,
+            hidden: coach.hidePrompt,
+            label: coach.hidePrompt ? '显示中文' : '遮住中文',
+            onPressed: coach.busy ? null : coach.toggleHidePrompt,
+          ),
+          _hideRow(
+            shown: coach.hideAnswer ? '英文已遮住' : item.targetEn,
+            hidden: coach.hideAnswer,
+            label: coach.hideAnswer ? '显示英文' : '遮住英文',
+            onPressed: coach.busy ? null : coach.toggleHideAnswer,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _hideRow({
+    required String shown,
+    required bool hidden,
+    required String label,
+    required VoidCallback? onPressed,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            shown,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: hidden ? muted : ink, fontSize: 15),
+          ),
+        ),
+        TextButton(onPressed: onPressed, child: Text(label)),
+      ],
     );
   }
 }

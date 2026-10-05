@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:flutter/services.dart';
 
+/// A teacher lookup returns at most this many rows.
+const cefrLookupCap = 8;
+
 /// One lemma in the CEFR core wordbook (A1/A2/B1).
 class CefrWord {
   final String id;

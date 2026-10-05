@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:english_app/app/app_model.dart';
+import 'package:english_app/engine/agent_tools.dart';
 import 'package:english_app/engine/api_requests.dart';
 import 'package:english_app/engine/chat_message.dart';
 import 'package:english_app/net/poster.dart';
@@ -192,6 +193,7 @@ void main() {
     expect(find.text('I are student.'), findsOneWidget);
     expect(find.textContaining('"kind"'), findsNothing);
     expect(find.text('先到这'), findsOneWidget);
+    expect(find.text('不会'), findsOneWidget);
     await tester.tap(find.text('I are student.'));
     await tester.pump();
     await tester.tap(find.text('I am a student.'));
@@ -199,6 +201,148 @@ void main() {
     expect(find.text('确认'), findsOneWidget);
     expect(poster.calls, hasLength(1));
     expect(store.progressJson().contains('apiKey'), isFalse);
+  });
+
+  testWidgets('不会 submits the fixed sentence and stores the answer as shown', (
+    tester,
+  ) async {
+    final view = tester.view;
+    view.physicalSize = const Size(400, 960);
+    view.devicePixelRatio = 1.0;
+    addTearDown(view.resetPhysicalSize);
+    addTearDown(view.resetDevicePixelRatio);
+
+    final poster = RecordingPoster();
+    poster.responses.add(
+      Posted(
+        200,
+        '{"choices":[{"finish_reason":"tool_calls","message":{"content":"看这张卡片。","tool_calls":[{"id":"c1","type":"function","function":{"name":"present_card","arguments":${jsonEncode(jsonEncode(_meetingArgs))}}}]}}]}',
+      ),
+    );
+    final model = AppModel(
+      store: fixtureStore(clock: () => DateTime(2026, 10, 4), levelChosen: true),
+      poster: poster,
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    final item = model.classCoach.log.book.addItem(
+      promptCn: '会议',
+      targetEn: 'meeting',
+      difficulty: 1,
+    );
+    poster.responses.add(
+      Posted(
+        200,
+        _recordReply(
+          itemId: item.id,
+          content: '会议是 meeting。',
+          revealed: false,
+          pass: false,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pumpAndSettle();
+
+    expect(find.text('哪个词是「会议」的意思？'), findsOneWidget);
+    expect(find.byKey(const Key('option-a')), findsOneWidget);
+    expect(find.text('morning'), findsOneWidget);
+    expect(find.text('money'), findsOneWidget);
+    expect(find.text('不会'), findsOneWidget);
+    final confirm = tester.widget<FilledButton>(find.byKey(const Key('answer-confirm')));
+    expect(confirm.onPressed, isNull);
+
+    await tester.tap(find.text('不会'));
+    await tester.pumpAndSettle();
+
+    expect(find.text(cardUnknownText), findsOneWidget);
+    expect(find.byKey(const Key('option-a')), findsNothing);
+    expect(find.byKey(const Key('answer-card')), findsNothing);
+    expect(model.classCoach.log.book.attempts, hasLength(1));
+    final attempt = model.classCoach.log.book.attempts.single;
+    expect(attempt.submission, cardUnknownText);
+    expect(attempt.optionId, isNull);
+    expect(attempt.revealed, isTrue);
+    expect(attempt.pass, isFalse);
+  });
+
+  testWidgets('hiding the practiced English stores the typed sentence as unrevealed', (
+    tester,
+  ) async {
+    final view = tester.view;
+    view.physicalSize = const Size(400, 960);
+    view.devicePixelRatio = 1.0;
+    addTearDown(view.resetPhysicalSize);
+    addTearDown(view.resetDevicePixelRatio);
+
+    final model = AppModel(
+      store: fixtureStore(clock: () => DateTime(2026, 10, 4), levelChosen: true),
+      poster: RecordingPoster(),
+      deepSeekKey: 'test-key',
+      unlocked: true,
+    );
+    final coach = model.classCoach;
+    final now = DateTime.now();
+    final open = coach.log.ensureOpen(now);
+    open.messages.add(
+      const ChatMessage(id: 'hi', role: ChatRole.assistant, content: '我们练这一句。'),
+    );
+    open.lastMessageAt = now;
+    final item = coach.log.book.addItem(
+      promptCn: '我六点起床。',
+      targetEn: 'I get up at six.',
+      difficulty: 1,
+    );
+    final poster = model.poster as RecordingPoster;
+    poster.responses.add(
+      Posted(200, _recordReply(itemId: item.id, content: '记下了。', revealed: true, pass: true)),
+    );
+    poster.responses.add(
+      Posted(200, _recordReply(itemId: item.id, content: '这句还看得到。', revealed: true, pass: false)),
+    );
+
+    await tester.pumpWidget(EnglishApp(model: model));
+    await tester.pump();
+
+    expect(find.text('我六点起床。'), findsOneWidget);
+    expect(find.text('I get up at six.'), findsOneWidget);
+    await tester.tap(find.text('遮住英文'));
+    await tester.pump();
+    expect(find.text('I get up at six.'), findsNothing);
+    expect(find.text('英文已遮住'), findsOneWidget);
+    expect(find.text('我六点起床。'), findsOneWidget);
+
+    await tester.tap(find.text('遮住中文'));
+    await tester.pump();
+    expect(find.text('我六点起床。'), findsNothing);
+    expect(find.text('中文已遮住'), findsOneWidget);
+    await tester.tap(find.text('显示中文'));
+    await tester.pump();
+    expect(find.text('我六点起床。'), findsOneWidget);
+    expect(find.text('英文已遮住'), findsOneWidget);
+
+    await tester.enterText(_sayField, 'I get up at six.');
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+
+    expect(coach.log.book.attempts, hasLength(1));
+    expect(coach.log.book.attempts.single.submission, 'I get up at six.');
+    expect(coach.log.book.attempts.single.revealed, isFalse);
+    expect(coach.log.book.attempts.single.pass, isTrue);
+
+    await tester.tap(find.text('显示英文'));
+    await tester.pump();
+    expect(find.text('遮住英文'), findsOneWidget);
+    expect(find.text('英文已遮住'), findsNothing);
+    await tester.enterText(_sayField, 'I get up at seven.');
+    await tester.tap(find.text('发送'));
+    await tester.pumpAndSettle();
+
+    expect(coach.log.book.attempts, hasLength(2));
+    expect(coach.log.book.attempts.last.submission, 'I get up at seven.');
+    expect(coach.log.book.attempts.last.revealed, isTrue);
+    expect(coach.log.book.attempts.last.pass, isFalse);
   });
 
   testWidgets('测试连接 shows progress, then the result', (tester) async {
@@ -301,6 +445,43 @@ final Finder _keyField = find.byWidgetPredicate(
   (widget) => widget is TextField && widget.decoration?.hintText == '粘贴密钥',
 );
 
+final Finder _sayField = find.byWidgetPredicate(
+  (widget) => widget is TextField && widget.decoration?.hintText == '跟老师说',
+);
+
+String _recordReply({
+  required String itemId,
+  required String content,
+  required bool revealed,
+  required bool pass,
+}) {
+  final arguments = jsonEncode({
+    'item_id': itemId,
+    'pass': pass,
+    'corrected_en': 'I get up at six.',
+    'revealed': revealed,
+    'submission': '模型改写的原文',
+    'error_tag': pass ? '' : '其它',
+  });
+  return jsonEncode({
+    'choices': [
+      {
+        'finish_reason': 'tool_calls',
+        'message': {
+          'content': content,
+          'tool_calls': [
+            {
+              'id': 'rec',
+              'type': 'function',
+              'function': {'name': 'record_attempt', 'arguments': arguments},
+            },
+          ],
+        },
+      },
+    ],
+  });
+}
+
 class HeldPoster implements Poster {
   final List<ApiCall> calls = [];
   Completer<Posted>? _pending;
@@ -347,6 +528,16 @@ String _wrap(String content) {
 
 const _choiceArgs =
     '{"kind":"choice","prompt":"选一句","options":[{"id":"a","text":"I am a student."},{"id":"b","text":"I are student."}]}';
+
+const _meetingArgs = {
+  'kind': 'choice',
+  'prompt': '哪个词是「会议」的意思？',
+  'options': [
+    {'id': 'a', 'text': 'meeting'},
+    {'id': 'b', 'text': 'morning'},
+    {'id': 'c', 'text': 'money'},
+  ],
+};
 
 const _passGrade =
     '{"pass":true,"errors":[],"corrected_en":"I finished the standup."}';

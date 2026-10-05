@@ -265,6 +265,10 @@ void main() {
     expect(prompt, contains('add_item'));
     expect(prompt, contains('record_attempt'));
     expect(prompt, contains('这两步完成前不要出卡片'));
+    expect(prompt, contains('当前水平'));
+    expect(prompt, contains('先单独认'));
+    expect(prompt, contains('点选只用来认'));
+    expect(prompt, contains('这题我不会'));
     expect(prompt.contains('上一节'), isFalse);
 
     final withNote = buildAgentSystem(previousCloseNote: '练了 apple\n最近一次：对\n无');

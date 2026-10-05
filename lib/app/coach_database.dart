@@ -263,6 +263,45 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
     );
   }
 
+  /// Capped read of the on-device wordbook. Writes nothing.
+  /// [band] is `a1`, `a2`, or `b1`. Empty [query] returns no rows.
+  Future<List<CefrWord>> lookupWords({
+    required String query,
+    required String band,
+    required int limit,
+  }) async {
+    final text = query.trim();
+    if (text.isEmpty || limit <= 0) return const [];
+    final cap = limit > cefrLookupCap ? cefrLookupCap : limit;
+    final escaped = text
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final rows = await db.rawQuery(
+      '''
+      SELECT id, en, cn, pos, level, book_id
+      FROM wordbook
+      WHERE level = ?
+        AND (
+          lower(en) = lower(?)
+          OR lower(en) LIKE lower(?) || '%' ESCAPE '\\'
+          OR cn LIKE '%' || ? || '%' ESCAPE '\\'
+        )
+      ORDER BY
+        CASE
+          WHEN lower(en) = lower(?) THEN 0
+          WHEN lower(en) LIKE lower(?) || '%' ESCAPE '\\' THEN 1
+          ELSE 2
+        END,
+        length(en),
+        en
+      LIMIT ?
+      ''',
+      [band, text, escaped, escaped, text, escaped, cap],
+    );
+    return [for (final row in rows) _rowToWord(row)];
+  }
+
   /// Load one lemma by id (lazy Lexeme hydrate).
   Future<CefrWord?> wordById(String id) async {
     final rows = await db.query(
