@@ -95,6 +95,7 @@ Future<void> main() async {
     persistStudy: schedulePersist,
   );
   model.lookupWords = coachDb.lookupWords;
+  model.searchWords = coachDb.searchWordbook;
   try {
     model.adoptStudyLog(await coachDb.loadStudyLog());
   } on Object {

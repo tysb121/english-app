@@ -144,7 +144,11 @@ SQLite 使用 `english_coach.db`，schema 升到 3。升级时保留现有各表
 
 学生事实放在 `settings`：`learner_name`、`learner_job`、`learner_goal`。当前题目是 `learner_current_item`。成功的 `note_fact` 更新名字、工作和目标。
 
-词页只供查阅词书。查阅不写作成绩，也不决定一条学习项是不是「会用」。
+词页按英文或中文查本机词书，列出英文、中文和词性。查阅不写学习项，也不写作成绩，不决定一条是不是「会用」。词页不排每日词表。
+
+记录页列出已经记下的学习项：中文、英文，以及状态（没练过 / 不稳 / 会用），旁边仍是各节聊天。打开记录不改状态、到期时间或成绩。
+
+「我的」可以改水平（入门 / 基础 / 进阶）和目标（职场 / 日常 / 考试 / 都要）。下一问读到的是当时的值。每天新词、语气、思考强度不出现在「我的」里，也不用来排课。
 
 ## 2026-10-04 落地
 
@@ -167,7 +171,7 @@ SQLite 使用 `english_coach.db`，schema 升到 3。升级时保留现有各表
 - `lib/ui/class_page.dart`、`lib/ui/answer_card.dart`。
 - 测试：`gradebook_test`、`class_policy_test`、`agent_tools_test`、`agent_loop_test`、`class_coach_test`、`study_store_test`。
 
-改过：`coach_database.dart`（schema 3，只加 `study_*` 表）、`app_model.dart`、`main.dart`、`api_requests.dart`、`sse_chat.dart`（解析工具参数增量）、`english_app.dart`、`records_page.dart`、相关 widget 测试。旧产品文档已从 `docs/` 删掉，留下本文和 `docs/发布与更新.md`。`LessonStore` 和词书还在，只给词页用。
+改过：`coach_database.dart`（schema 3，只加 `study_*` 表）、`app_model.dart`、`main.dart`、`api_requests.dart`、`sse_chat.dart`（解析工具参数增量）、`english_app.dart`、`records_page.dart`、相关 widget 测试。旧产品文档已从 `docs/` 删掉，留下本文和 `docs/发布与更新.md`。`LessonStore` 仍留在仓库里，不作为上课或词页的课表。词页查阅走本机词书，不走每日词表。
 
 ### 本机发布构建
 
@@ -194,8 +198,8 @@ flutter run --release -d 5f2829ec
 - 密钥已经在手机里，上课页直接开课。
 - 记录里有一节：`2026-10-04 13:11`，状态「这一节还开着」。点进去是同一段老师的话，这一页没有再请求老师。
 - 老师第一句把读记录的过程说了出来，而且和中文粘在一起：`I'll start by reading the learner's record.你好，我们开始今天这一节。` 后面才用中文说明名字、工作、目标都是空的，并问这三件事。系统提示写的是讲解用中文。这是下次要先看的问题。
-- 词页仍是原来的每日词书。今天的词能点开。词卡上的「还没排进某一天」是旧的复习日期，不写学习项。
-- 「我的」显示 v1.0.4，密钥是圆点，每天新词 5，水平入门，目标职场，语气简洁，思考关闭。
+- 当天词页还是每日词书，词卡上有「还没排进某一天」。后来词页改为按英文或中文查词书，不排每日词，也不写学习项。
+- 当天「我的」还显示每天新词、语气和思考强度。后来这些从「我的」拿掉，也不用来排课。水平和目标仍可改，下一问读到当前值。密钥、版本、检查更新、导出日志和清除数据留在「我的」。
 - 每页左缘都有一道小灰弧，包括没有左边控件的页面。那是系统侧边把手。
 
 走查结束时，`flutter run --release` 还挂着，应用停在上课页。下次先看这个进程还在不在，再决定要不要重新安装。

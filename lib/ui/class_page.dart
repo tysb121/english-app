@@ -18,6 +18,7 @@ class _ClassPageState extends State<ClassPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
   var _greeted = false;
+  String? _pinned;
 
   @override
   void initState() {
@@ -42,8 +43,20 @@ class _ClassPageState extends State<ClassPage> {
     final coach = model.classCoach;
     final open = coach.log.openClass;
     final waiting = coach.pendingCard != null;
+    final lastId = open == null || open.messages.isEmpty
+        ? ''
+        : open.messages.last.id;
+    _pinLatest(
+      '$lastId|${coach.draft}|${coach.pendingCard?.id}|${coach.error}',
+    );
     return SoftScaffold(
       title: '上课',
+      actions: [
+        TextButton(
+          onPressed: coach.busy ? null : () => coach.stopHere(),
+          child: const Text('先到这'),
+        ),
+      ],
       body: Column(
         children: [
           Expanded(
@@ -86,7 +99,10 @@ class _ClassPageState extends State<ClassPage> {
                             style: const TextStyle(color: wrongRed),
                           ),
                         ),
-                        TextButton(onPressed: coach.retry, child: const Text('再发一次')),
+                        TextButton(
+                          onPressed: coach.retry,
+                          child: const Text('再发一次'),
+                        ),
                       ],
                     ),
                   ),
@@ -95,13 +111,6 @@ class _ClassPageState extends State<ClassPage> {
           ),
           if (coach.practiced != null)
             _PracticeStrip(item: coach.practiced!, coach: coach),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: coach.busy ? null : () => coach.stopHere(),
-              child: const Text('先到这'),
-            ),
-          ),
           if (waiting)
             AnswerCardSheet(
               card: coach.pendingCard!,
@@ -123,6 +132,27 @@ class _ClassPageState extends State<ClassPage> {
         ],
       ),
     );
+  }
+
+  void _pinLatest(String token) {
+    if (token == _pinned) return;
+    _pinned = token;
+    _jumpToEnd();
+  }
+
+  void _jumpToEnd([int attempt = 0]) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!_scroll.hasClients) {
+        if (attempt < 3) _jumpToEnd(attempt + 1);
+        return;
+      }
+      final position = _scroll.position;
+      if (!position.hasContentDimensions) return;
+      final target = position.maxScrollExtent;
+      if ((position.pixels - target).abs() < 1) return;
+      position.jumpTo(target);
+    });
   }
 }
 
@@ -190,7 +220,7 @@ class _Bubble extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        constraints: const BoxConstraints(maxWidth: 320),
+        constraints: BoxConstraints(maxWidth: speechBubbleMaxWidth(context)),
         decoration: BoxDecoration(
           color: mine ? pine : mist,
           borderRadius: BorderRadius.circular(16),

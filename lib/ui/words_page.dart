@@ -1,255 +1,116 @@
 import 'package:flutter/material.dart';
 
-import '../engine/lesson_store.dart';
+import '../data/cefr_core.dart';
 import '../engine/pos_label.dart';
 import 'english_app.dart';
 import 'theme.dart';
 
-class WordsPage extends StatelessWidget {
+/// Lookup against the on-device wordbook. Searching writes no study item.
+class WordsPage extends StatefulWidget {
   const WordsPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final model = AppScope.of(context);
-    final store = model.store;
-    final plan = store.requiredTodayPlan;
-    final todayIds = [
-      ...plan.newWordIds,
-      ...plan.reviewWordIds,
-      ...plan.errorWordIds,
-    ];
-    final today = [for (final id in todayIds) store.word(id)].whereType<Lexeme>();
-    final later = store.browsableWords.where((word) => !todayIds.contains(word.id));
-    final remaining = store.untaughtInLevelCount();
-    final levelLabel = normalizeLevel(store.level);
-    return SoftScaffold(
-      title: '词本',
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
-        children: [
-          PrimaryCta(label: '添加生词', onPressed: () => _add(context)),
-          const SizedBox(height: 8),
-          const SectionTitle('今天的词', icon: Icons.wb_sunny_outlined),
-          if (today.isEmpty)
-            const EmptyHint(
-              icon: Icons.auto_stories_outlined,
-              title: '今天还没有词',
-              subtitle: '完成计划或添加生词后会出现在这里。',
-            )
-          else
-            for (final word in today) _row(context, word, highlight: true),
-          const SizedBox(height: 8),
-          SectionTitle('当前水平 · $levelLabel', icon: Icons.stairs_outlined),
-          AppCard(
-            child: Text(
-              remaining > 0
-                  ? '还有 $remaining 个未教词，每天从中随机抽。'
-                  : '这一档的新词已经抽完了，可以在「我的」里改水平（明天生效）。',
-              style: const TextStyle(color: muted, height: 1.4),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const SectionTitle('以后会学的词', icon: Icons.schedule_outlined),
-          if (later.isEmpty)
-            const EmptyHint(
-              icon: Icons.schedule_outlined,
-              title: '还没有排进以后的词',
-              subtitle: '自己加的生词会优先出现在这里。',
-            )
-          else
-            for (final word in later) _row(context, word),
-        ],
-      ),
-    );
-  }
-
-  Widget _row(BuildContext context, Lexeme word, {bool highlight = false}) {
-    return AppCard(
-      accent: highlight,
-      onTap: () {
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => WordCardPage(id: word.id),
-          ),
-        );
-      },
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  pine.withValues(alpha: 0.18),
-                  indigo.withValues(alpha: 0.12),
-                ],
-              ),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Text(
-              word.en.isNotEmpty ? word.en[0].toUpperCase() : '?',
-              style: const TextStyle(
-                color: pine,
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  word.en,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '${word.cn} · ${posLabelZh(word.pos)}',
-                  style: const TextStyle(color: muted, fontSize: 13),
-                ),
-              ],
-            ),
-          ),
-          const Icon(Icons.chevron_right_rounded, color: muted),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _add(BuildContext pageContext) async {
-    final en = TextEditingController();
-    final cn = TextEditingController();
-    final pos = TextEditingController();
-    final model = AppScope.of(pageContext);
-    await showDialog<void>(
-      context: pageContext,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('添加'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: en,
-                autocorrect: false,
-                enableSuggestions: false,
-                decoration: const InputDecoration(hintText: '英文'),
-              ),
-              TextField(
-                controller: cn,
-                decoration: const InputDecoration(hintText: '中文'),
-              ),
-              TextField(
-                controller: pos,
-                decoration: const InputDecoration(hintText: '词性（如 noun）'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (en.text.trim().isEmpty ||
-                    cn.text.trim().isEmpty ||
-                    pos.text.trim().isEmpty) {
-                  return;
-                }
-                final id = model.store.addUserWord(
-                  en: en.text.trim(),
-                  cn: cn.text.trim(),
-                  pos: pos.text.trim(),
-                );
-                model.commit();
-                Navigator.pop(dialogContext);
-                Navigator.of(pageContext).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => WordCardPage(id: id, fresh: true),
-                  ),
-                );
-              },
-              child: const Text('保存'),
-            ),
-          ],
-        );
-      },
-    );
-    en.dispose();
-    cn.dispose();
-    pos.dispose();
-  }
+  State<WordsPage> createState() => _WordsPageState();
 }
 
-class WordCardPage extends StatelessWidget {
-  const WordCardPage({super.key, required this.id, this.fresh = false});
+class _WordsPageState extends State<WordsPage> {
+  final _query = TextEditingController();
+  var _generation = 0;
+  List<CefrWord> _hits = const [];
+  String? _note;
 
-  final String id;
-  final bool fresh;
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  Future<void> _lookup(String raw) async {
+    final text = raw.trim();
+    final generation = ++_generation;
+    if (text.isEmpty) {
+      setState(() {
+        _hits = const [];
+        _note = null;
+      });
+      return;
+    }
+    final search = AppScope.of(context).searchWords;
+    if (search == null) {
+      setState(() {
+        _hits = const [];
+        _note = '词书还没准备好';
+      });
+      return;
+    }
+    final hits = await search(query: text, limit: cefrLookupCap);
+    if (!mounted || generation != _generation) return;
+    setState(() {
+      _hits = hits;
+      _note = hits.isEmpty ? '词书里没有这一条' : null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final store = AppScope.of(context).store;
-    final word = store.word(id);
-    final next = word == null
-        ? null
-        : store.nextErrorReview(id) ?? store.successReviewOn(id);
+    final query = _query.text.trim();
     return SoftScaffold(
-      title: '词卡',
-      leading: IconButton(
-        icon: const Icon(Icons.close),
-        onPressed: () => Navigator.maybePop(context),
+      title: '词',
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: TextField(
+              controller: _query,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: const InputDecoration(hintText: '查英文或中文'),
+              onChanged: _lookup,
+            ),
+          ),
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+              children: [
+                if (query.isEmpty)
+                  const EmptyHint(
+                    icon: Icons.search,
+                    title: '查本机词书',
+                    subtitle: '输入英文或中文。查阅不记成绩。',
+                  )
+                else if (_note != null)
+                  EmptyHint(
+                    icon: Icons.search_off,
+                    title: _note!,
+                    subtitle: '换一个词再查。',
+                  )
+                else
+                  for (final word in _hits) _hit(word),
+              ],
+            ),
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: word == null
-            ? const SizedBox.shrink()
-            : Align(
-                alignment: Alignment.topCenter,
-                child: SizedBox(
-                  width: double.infinity,
-                  child: AppCard(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          word.en,
-                          style: const TextStyle(
-                            fontSize: 32,
-                            fontWeight: FontWeight.w800,
-                            color: ink,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(word.cn, style: const TextStyle(fontSize: 20)),
-                        Text(
-                          posLabelZh(word.pos),
-                          style: const TextStyle(color: muted),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          next == null
-                              ? '还没排进某一天'
-                              : '下一次 ${store.formatDay(next)}',
-                          style: const TextStyle(color: muted),
-                        ),
-                        if (fresh) ...[
-                          const SizedBox(height: 12),
-                          const Text(
-                            '从明天开始练',
-                            style: TextStyle(color: pine),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+    );
+  }
+
+  Widget _hit(CefrWord word) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            word.en,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 2),
+          Text(word.cn, style: const TextStyle(fontSize: 15)),
+          const SizedBox(height: 2),
+          Text(
+            posLabelZh(word.pos),
+            style: const TextStyle(color: muted, fontSize: 13),
+          ),
+        ],
       ),
     );
   }

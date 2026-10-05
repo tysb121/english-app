@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/cefr_core.dart';
 import '../engine/agent_tools.dart';
 import '../engine/api_requests.dart';
 import '../engine/chat_thread.dart';
@@ -40,6 +41,10 @@ class AppModel extends ChangeNotifier {
   final void Function(SavedSecrets secrets)? persistSecrets;
   final void Function()? persistStudy;
   WordLookup? lookupWords;
+
+  /// Read-only wordbook search for the 词 tab. Not a teacher tool.
+  Future<List<CefrWord>> Function({required String query, required int limit})?
+  searchWords;
   late final ClassCoach classCoach;
 
   bool connectionOk = false;

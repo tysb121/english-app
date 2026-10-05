@@ -5,7 +5,8 @@ import 'dart:math';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart' show databaseFactoryFfi, sqfliteFfiInit;
+import 'package:sqflite_common_ffi/sqflite_ffi.dart'
+    show databaseFactoryFfi, sqfliteFfiInit;
 
 import '../data/cefr_core.dart';
 import '../engine/chat_context.dart';
@@ -247,9 +248,7 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
 
   Future<List<CefrWord>> loadWordbook() async {
     final rows = await db.query('wordbook', orderBy: 'id');
-    return [
-      for (final row in rows) _rowToWord(row),
-    ];
+    return [for (final row in rows) _rowToWord(row)];
   }
 
   CefrWord _rowToWord(Map<String, Object?> row) {
@@ -298,6 +297,41 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
       LIMIT ?
       ''',
       [band, text, escaped, escaped, text, escaped, cap],
+    );
+    return [for (final row in rows) _rowToWord(row)];
+  }
+
+  /// Read the whole on-device wordbook by English or Chinese. Writes nothing.
+  /// An empty query returns no rows. [limit] is capped at [cefrLookupCap].
+  Future<List<CefrWord>> searchWordbook({
+    required String query,
+    required int limit,
+  }) async {
+    final text = query.trim();
+    if (text.isEmpty || limit <= 0) return const [];
+    final cap = limit > cefrLookupCap ? cefrLookupCap : limit;
+    final escaped = text
+        .replaceAll(r'\', r'\\')
+        .replaceAll('%', r'\%')
+        .replaceAll('_', r'\_');
+    final rows = await db.rawQuery(
+      '''
+      SELECT id, en, cn, pos, level, book_id
+      FROM wordbook
+      WHERE lower(en) = lower(?)
+        OR lower(en) LIKE lower(?) || '%' ESCAPE '\\'
+        OR cn LIKE '%' || ? || '%' ESCAPE '\\'
+      ORDER BY
+        CASE
+          WHEN lower(en) = lower(?) THEN 0
+          WHEN lower(en) LIKE lower(?) || '%' ESCAPE '\\' THEN 1
+          ELSE 2
+        END,
+        length(en),
+        en
+      LIMIT ?
+      ''',
+      [text, escaped, escaped, text, escaped, cap],
     );
     return [for (final row in rows) _rowToWord(row)];
   }
@@ -382,10 +416,9 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
   }) async {
     if (exclude.isEmpty) {
       return Sqflite.firstIntValue(
-            await db.rawQuery(
-              'SELECT COUNT(*) FROM wordbook WHERE level = ?',
-              [level],
-            ),
+            await db.rawQuery('SELECT COUNT(*) FROM wordbook WHERE level = ?', [
+              level,
+            ]),
           ) ??
           0;
     }
@@ -402,10 +435,9 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
     }
     final total =
         Sqflite.firstIntValue(
-          await db.rawQuery(
-            'SELECT COUNT(*) FROM wordbook WHERE level = ?',
-            [level],
-          ),
+          await db.rawQuery('SELECT COUNT(*) FROM wordbook WHERE level = ?', [
+            level,
+          ]),
         ) ??
         0;
     var taughtInLevel = 0;
@@ -428,7 +460,7 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
     return left < 0 ? 0 : left;
   }
 
-    Future<void> saveShell(ProgressShell shell) async {
+  Future<void> saveShell(ProgressShell shell) async {
     final lesson = shell.store.toJson();
     final chat = shell.chat.toJson();
     await db.transaction((txn) async {
@@ -882,7 +914,8 @@ CREATE TABLE IF NOT EXISTS study_class_checkpoints (
       'goal': settings[_learnerGoalKey] ?? '',
       'currentItemId': _blankToNull(settings[_learnerCurrentItemKey]),
     };
-    final hasFacts = _text(facts['name']).isNotEmpty ||
+    final hasFacts =
+        _text(facts['name']).isNotEmpty ||
         _text(facts['job']).isNotEmpty ||
         _text(facts['goal']).isNotEmpty ||
         facts['currentItemId'] != null;

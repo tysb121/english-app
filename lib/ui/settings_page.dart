@@ -10,10 +10,8 @@ import 'package:path_provider/path_provider.dart';
 import '../app/app_model.dart';
 import '../app/diagnostics.dart';
 import '../engine/lesson_store.dart';
-import '../engine/reasoning_effort.dart';
 import 'english_app.dart';
 import 'theme.dart';
-import 'upgrade_nudge.dart';
 import '../update/update_ui.dart';
 import '../update/version.dart';
 
@@ -173,44 +171,16 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           if (!widget.gate) ...[
             const SizedBox(height: 16),
-            const SectionTitle('每天新词', icon: Icons.numbers_rounded),
-            _choices<int>(
-              values: const [5, 10, 15, 20],
-              label: (value) => '$value',
-              selected: store.dailyWords,
-              onPick: (value) {
-                store.dailyWords = value;
-                model.commit();
-              },
-            ),
-            const SizedBox(height: 16),
             const SectionTitle('水平', icon: Icons.stairs_outlined),
             _choices<String>(
               values: _levels,
               label: (value) => value,
               selected: level,
-              onPick: (value) async {
-                if (store.level != value) {
-                  store.level = value;
-                  store.upgradeNudgeDismissed = false;
-                  store.invalidateUntaughtCount();
-                }
-                await store.refreshUntaughtInLevelCount();
+              onPick: (value) {
+                store.level = value;
                 model.commit();
-                setState(() {});
               },
             ),
-            const SizedBox(height: 8),
-            Text(
-              store.hasFrozenTodayPlan
-                  ? '今日练习已开始，改水平和词数会从明天起生效。'
-                  : '改水平和词数会从下一次新练习起生效。',
-              style: const TextStyle(color: muted, fontSize: 13),
-            ),
-            if (store.shouldOfferLevelUpgrade) ...[
-              const SizedBox(height: 12),
-              const UpgradeNudgeCard(),
-            ],
             const SizedBox(height: 16),
             const SectionTitle('目标', icon: Icons.flag_outlined),
             _choices<String>(
@@ -221,33 +191,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 store.goal = value;
                 model.commit();
               },
-            ),
-            const SizedBox(height: 16),
-            const SectionTitle('语气', icon: Icons.chat_outlined),
-            _choices<String>(
-              values: const ['简洁', '朋友', '老师'],
-              label: (value) => value,
-              selected: store.tone,
-              onPick: (value) {
-                store.tone = value;
-                model.commit();
-              },
-            ),
-            const SizedBox(height: 16),
-            const SectionTitle('思考强度', icon: Icons.psychology_outlined),
-            _choices<String>(
-              values: reasoningEfforts,
-              label: reasoningEffortLabel,
-              selected: normalizeReasoningEffort(store.reasoningEffort),
-              onPick: (value) {
-                store.reasoningEffort = normalizeReasoningEffort(value);
-                model.commit();
-              },
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '关闭后不显示思考过程。中/高会让教练多想一会儿再回复。',
-              style: TextStyle(color: ink, fontSize: 12),
             ),
             const SizedBox(height: 16),
             const SectionTitle('关于与数据', icon: Icons.info_outline_rounded),
@@ -385,7 +328,7 @@ class _SettingsPageState extends State<SettingsPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('清除数据重来？'),
-        content: const Text('将清空练习进度与教练聊天。密钥、水平和词数设置会保留。此操作不可撤销。'),
+        content: const Text('将清空练习进度与教练聊天。密钥、水平和目标会保留。此操作不可撤销。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

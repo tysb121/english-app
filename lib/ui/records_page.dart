@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../engine/chat_message.dart';
+import '../engine/gradebook.dart';
 import '../engine/lesson_store.dart';
 import 'english_app.dart';
 import 'theme.dart';
@@ -11,10 +12,11 @@ class RecordsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
+    final items = model.classCoach.log.book.items;
     final classes = model.classCoach.log.classes.reversed.toList();
     return SoftScaffold(
       title: '记录',
-      body: classes.isEmpty
+      body: items.isEmpty && classes.isEmpty
           ? const Center(
               child: Padding(
                 padding: EdgeInsets.all(24),
@@ -28,33 +30,63 @@ class RecordsPage extends StatelessWidget {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               children: [
-                for (final item in classes)
-                  AppCard(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => ClassRecordPage(classId: item.id),
-                        ),
-                      );
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _stamp(item.startedAt),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                            fontSize: 16,
+                if (items.isNotEmpty) ...[
+                  const SectionTitle('学习项', icon: Icons.menu_book_outlined),
+                  for (final item in items)
+                    AppCard(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            item.promptCn,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.closeNote.trim().isEmpty ? '这一节还开着' : item.closeNote,
-                          style: const TextStyle(color: muted, fontSize: 13),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(item.targetEn),
+                          const SizedBox(height: 4),
+                          Text(
+                            itemStatusLabel(item.status),
+                            style: const TextStyle(color: muted, fontSize: 13),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                ],
+                if (classes.isNotEmpty) ...[
+                  const SectionTitle('上课', icon: Icons.calendar_month_outlined),
+                  for (final item in classes)
+                    AppCard(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ClassRecordPage(classId: item.id),
+                          ),
+                        );
+                      },
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _stamp(item.startedAt),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            item.closeNote.trim().isEmpty
+                                ? '这一节还开着'
+                                : item.closeNote,
+                            style: const TextStyle(color: muted, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ],
             ),
     );
@@ -91,7 +123,10 @@ class ClassRecordPage extends StatelessWidget {
                 if (item.closeNote.trim().isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: Text(item.closeNote, style: const TextStyle(color: muted)),
+                    child: Text(
+                      item.closeNote,
+                      style: const TextStyle(color: muted),
+                    ),
                   ),
                 for (final message in item.messages)
                   Align(
@@ -100,8 +135,13 @@ class ClassRecordPage extends StatelessWidget {
                         : Alignment.centerLeft,
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      constraints: const BoxConstraints(maxWidth: 320),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      constraints: BoxConstraints(
+                        maxWidth: speechBubbleMaxWidth(context),
+                      ),
                       decoration: BoxDecoration(
                         color: message.role == ChatRole.user ? pine : mist,
                         borderRadius: BorderRadius.circular(16),
@@ -109,7 +149,9 @@ class ClassRecordPage extends StatelessWidget {
                       child: Text(
                         message.content,
                         style: TextStyle(
-                          color: message.role == ChatRole.user ? Colors.white : ink,
+                          color: message.role == ChatRole.user
+                              ? Colors.white
+                              : ink,
                         ),
                       ),
                     ),

@@ -11,6 +11,13 @@ const Color mist = Color(0xFFFFFFFF);
 const Color wrongRed = Color(0xFFB42318);
 const Color softBorder = Color(0xFFD7DEEA);
 
+/// Bubble width follows the screen instead of a fixed 320.
+double speechBubbleMaxWidth(BuildContext context) {
+  final width = MediaQuery.sizeOf(context).width;
+  final room = width - 32;
+  return room < 120 ? width : room;
+}
+
 ThemeData buildTheme() {
   final base = ColorScheme.fromSeed(
     seedColor: pine,
@@ -23,7 +30,11 @@ ThemeData buildTheme() {
     useMaterial3: true,
     brightness: Brightness.light,
     scaffoldBackgroundColor: paper,
-    colorScheme: base.copyWith(onSurface: ink, primary: pine, secondary: indigo),
+    colorScheme: base.copyWith(
+      onSurface: ink,
+      primary: pine,
+      secondary: indigo,
+    ),
     textTheme: const TextTheme(
       headlineMedium: TextStyle(
         fontSize: 28,
@@ -165,11 +176,7 @@ class SoftScaffold extends StatelessWidget {
       ),
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          leading: leading,
-          title: Text(title),
-          actions: actions,
-        ),
+        appBar: AppBar(leading: leading, title: Text(title), actions: actions),
         body: body,
         floatingActionButton: floatingActionButton,
         bottomNavigationBar: bottomNavigationBar,
@@ -310,7 +317,9 @@ class ProgressChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: done ? pine.withValues(alpha: 0.14) : mist,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: done ? pine.withValues(alpha: 0.35) : softBorder),
+        border: Border.all(
+          color: done ? pine.withValues(alpha: 0.35) : softBorder,
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
